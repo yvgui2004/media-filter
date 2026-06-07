@@ -71,9 +71,17 @@ VIDEO_EXT = {
     '.f4v', '.divx', '.mpg', '.mpeg'
 }
 
+AUDIO_EXT = {
+    '.mp3', '.aac', '.flac', '.wav', '.ogg', '.wma', '.m4a', '.opus',
+    '.ac3', '.dts', '.alac', '.aiff', '.ape', '.wv', '.amr', '.ra',
+    '.mid', '.midi', '.caf', '.au', '.pcm'
+}
+
+MEDIA_EXT = VIDEO_EXT | AUDIO_EXT
+
 TEXTS = {
     'zh': {
-        'title': "视频统计 v2.4.0 · A (GitHub)",
+        'title': "媒体统计 v2.4.0 · A (GitHub)",
         'select_folder': "选择文件夹",
         'export_txt': "导出 TXT",
         'no_folder': "未选择文件夹",
@@ -91,8 +99,8 @@ TEXTS = {
         'total_duration': "全部总时长: {}",
         'selected_stats': "已勾选: {} 个 | 总时长: {} | 总大小: {}",
         'scanning': "正在扫描...",
-        'found': "共找到 {} 个视频文件",
-        'no_video': "未找到视频文件",
+        'found': "共找到 {} 个媒体文件",
+        'no_video': "未找到媒体文件",
         'warning': "警告",
         'info': "信息",
         'error': "错误",
@@ -101,7 +109,7 @@ TEXTS = {
         'export_success': "已成功导出到:\n{}",
         'export_failed': "导出失败",
         'no_data': "没有数据可导出，请先扫描文件夹。",
-        'ffprobe_warning': "未检测到 ffprobe，无法获取视频时长。\n请安装 FFmpeg 或将 ffprobe.exe 放在程序目录。",
+        'ffprobe_warning': "未检测到 ffprobe，无法获取媒体时长。\n请安装 FFmpeg 或将 ffprobe.exe 放在程序目录。",
         'settings': "设置",
         'appearance': "外观",
         'theme': "主题",
@@ -123,7 +131,7 @@ TEXTS = {
         'column_vbr': "视频码率",
         'column_abr': "音频码率",
         'unknown': "未知",
-        'total_files': "总视频数量: {}",
+        'total_files': "总媒体数量: {}",
         'folder_total_duration': "文件夹总时长: {}",
         'exported_total_duration': "导出文件总时长: {}",
         'exported_total_size': "导出文件总大小: {}",
@@ -137,9 +145,9 @@ TEXTS = {
         'rename_error': "重命名失败: {}",
         'open_file': "打开文件",
         'open_location': "打开文件所在位置",
-        'app_title': "视频统计",
+        'app_title': "媒体统计",
         'app_subtitle': "专业版 v2.4.0",
-        'videos': "视频",
+        'videos': "媒体",
         'duration_label': "时长",
         'size_label': "大小",
         'open_folder': "打开文件夹",
@@ -147,7 +155,7 @@ TEXTS = {
         'selection': "已选择",
         'folder_stats': "文件夹统计",
         'selection_stats': "选择统计",
-        'export_heading': "视频文件导出报表",
+        'export_heading': "媒体文件导出报表",
         'export_all': "全部",
         'filter_label': "筛选格式",
         'filter_all': "全部格式",
@@ -189,7 +197,7 @@ TEXTS = {
         'preset_nvenc_h264_comment': '# GPU硬件加速(NVIDIA独立显卡)转H.264, 兼容性广, 保持画质',
     },
     'en': {
-        'title': "Video Stats v2.4.0 · A (GitHub)",
+        'title': "Media Stats v2.4.0 · A (GitHub)",
         'select_folder': "Open Folder",
         'export_txt': "Export TXT",
         'no_folder': "No folder selected",
@@ -207,8 +215,8 @@ TEXTS = {
         'total_duration': "Total Duration: {}",
         'selected_stats': "Selected: {} files | Duration: {} | Size: {}",
         'scanning': "Scanning...",
-        'found': "Found {} video file(s)",
-        'no_video': "No video files found",
+        'found': "Found {} media file(s)",
+        'no_video': "No media files found",
         'warning': "Warning",
         'info': "Info",
         'error': "Error",
@@ -217,7 +225,7 @@ TEXTS = {
         'export_success': "Successfully exported to:\n{}",
         'export_failed': "Export failed",
         'no_data': "No data to export. Please scan a folder first.",
-        'ffprobe_warning': "ffprobe not detected. Video duration will be unavailable.\nPlease install FFmpeg or place ffprobe.exe beside this program.",
+        'ffprobe_warning': "ffprobe not detected. Media duration will be unavailable.\nPlease install FFmpeg or place ffprobe.exe beside this program.",
         'settings': "Settings",
         'appearance': "Appearance",
         'theme': "Theme",
@@ -253,9 +261,9 @@ TEXTS = {
         'rename_error': "Rename failed: {}",
         'open_file': "Open File",
         'open_location': "Open File Location",
-        'app_title': "Video Stats",
+        'app_title': "Media Stats",
         'app_subtitle': "Pro v2.4.0",
-        'videos': "Videos",
+        'videos': "Media",
         'duration_label': "Duration",
         'size_label': "Size",
         'open_folder': "Open Folder",
@@ -263,7 +271,7 @@ TEXTS = {
         'selection': "Selection",
         'folder_stats': "Folder Stats",
         'selection_stats': "Selection Stats",
-        'export_heading': "Video File Export Report",
+        'export_heading': "Media File Export Report",
         'export_all': "All",
         'filter_label': "Filter",
         'filter_all': "All Formats",
@@ -1581,7 +1589,7 @@ class VideoInfoApp:
                 for root, dirs, files in os.walk(folder):
                     for f in files:
                         ext = os.path.splitext(f)[1].lower()
-                        if ext in VIDEO_EXT:
+                        if ext in MEDIA_EXT:
                             video_files.append(os.path.join(root, f))
                             extensions_found.add(ext)
 
