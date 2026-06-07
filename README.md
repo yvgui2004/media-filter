@@ -31,6 +31,8 @@
 | 排序筛选 | 按名称、大小、时长、码率排序；按格式筛选 |
 | Selection stats | Multi-select files to view total count, duration, and size |
 | 选择统计 | 勾选多个文件实时显示总数量、总时长、总大小 |
+| Export TXT | Export file list with statistics (name, size, duration, bitrate) to TXT report |
+| 导出 TXT | 导出文件列表及统计信息（文件名、大小、时长、码率）到 TXT 报表 |
 | Batch commands | Built-in presets: x265 CRF CPU / NVENC HEVC / NVENC H.264 |
 | 批量命令 | 内置转码预设，支持自定义命令和参数 |
 | Theme | Dark / Light mode with smooth animated transition |
