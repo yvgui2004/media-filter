@@ -5,10 +5,10 @@
   <img src="https://img.shields.io/badge/GUI-CustomTkinter-3b8ed0" alt="CustomTkinter">
 </p>
 
-<h1 align="center">Video Filter / 视频筛选器</h1>
+<h1 align="center">Media Filter / 媒体筛选器</h1>
 
-<p align="center">A desktop GUI tool for scanning video folders, analyzing file statistics, and generating batch FFmpeg transcoding commands.<br>
-桌面端视频文件扫描统计工具，支持查看码率/时长/大小，批量生成 FFmpeg 转码命令。</p>
+<p align="center">A desktop GUI tool for scanning media folders (video + audio), analyzing file statistics, and generating batch FFmpeg transcoding commands.<br>
+桌面端媒体文件扫描统计工具，支持视频和音频文件的码率/时长/大小查看，批量生成 FFmpeg 转码命令。</p>
 
 <p align="center">
   <a href="#features--功能">Features</a> ·
@@ -23,12 +23,12 @@
 
 | Feature | Description |
 |---------|-------------|
-| Folder scanning | Recursively scan folders for video files, extract size / duration / bitrate via ffprobe |
-| 文件夹扫描 | 递归扫描文件夹，通过 ffprobe 提取视频大小、时长、码率 |
+| Folder scanning | Recursively scan folders for video + audio files, extract size / duration / bitrate via ffprobe |
+| 文件夹扫描 | 递归扫描文件夹，支持视频和音频文件，通过 ffprobe 提取大小、时长、码率 |
 | Multi-threaded | Configurable thread count for fast scanning of large folders |
-| 多线程 | 可配置线程数，快速处理大量视频文件 |
+| 多线程 | 可配置线程数，快速处理大量媒体文件 |
 | Sort & filter | Sort by name / size / duration / bitrate; filter by file format |
-| 排序筛选 | 按名称、大小、时长、码率排序；按视频格式筛选 |
+| 排序筛选 | 按名称、大小、时长、码率排序；按格式筛选 |
 | Selection stats | Multi-select files to view total count, duration, and size |
 | 选择统计 | 勾选多个文件实时显示总数量、总时长、总大小 |
 | Batch commands | Built-in presets: x265 CRF CPU / NVENC HEVC / NVENC H.264 |
@@ -82,9 +82,9 @@ pip install customtkinter -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 ### 3. FFmpeg (includes ffprobe)
 
-The app uses `ffprobe` to read video metadata. FFmpeg must be installed and in PATH.
+The app uses `ffprobe` to read media metadata. FFmpeg must be installed and in PATH.
 
-程序通过 `ffprobe` 读取视频元数据，必须先安装 FFmpeg 并加入系统 PATH。
+程序通过 `ffprobe` 读取媒体元数据，必须先安装 FFmpeg 并加入系统 PATH。
 
 **Windows:**
 
@@ -130,7 +130,7 @@ python 3.py
 |------|--------|
 | 1 | Click **Open Folder** / 点击"选择文件夹" |
 | 2 | Sort by name/size/duration, filter by format / 排序、筛选 |
-| 3 | Check boxes to select files / 勾选视频文件 |
+| 3 | Check boxes to select files / 勾选媒体文件 |
 | 4 | Optionally apply batch command presets / 可选应用批量命令预设 |
 | 5 | Copy file paths or execute commands / 复制路径或执行命令 |
 
