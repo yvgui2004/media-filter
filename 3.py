@@ -747,6 +747,12 @@ class VideoInfoApp:
             self.tree.tag_configure('hover', background=c2['row_hover'])
 
         self._update_pywinstyles()
+        self._disable_treeview_keys()
+
+    def _disable_treeview_keys(self):
+        if not hasattr(self, 'tree'):
+            return
+        self.root.tk.eval('bind Treeview <KeyPress> {}')
 
     def _refresh_tree_tags(self):
         c = self._get_tree_colors()
@@ -917,6 +923,8 @@ class VideoInfoApp:
         self._build_statusbar(self.content_frame)
 
         self.root.bind("<Configure>", self._on_sidebar_resize, add='+')
+        import ctypes
+        ctypes.windll.imm32.ImmAssociateContext(self.root.winfo_id(), None)
 
     def _build_sidebar(self):
         c = self._get_tree_colors()
@@ -1124,6 +1132,7 @@ class VideoInfoApp:
                                           corner_radius=6,
                                           command=self.on_sort_change)
         self.combo_sort.grid(row=0, column=1, padx=(0, 10))
+        self.combo_sort.bind('<KeyPress>', lambda e: 'break')
 
         self.btn_order = ctk.CTkButton(toolbar,
                                        text=self.t('asc'),
@@ -1152,6 +1161,7 @@ class VideoInfoApp:
                                             corner_radius=6,
                                             command=self.on_filter_change)
         self.combo_filter.grid(row=0, column=4, padx=(0, 14))
+        self.combo_filter.bind('<KeyPress>', lambda e: 'break')
 
         self.btn_refresh = ctk.CTkButton(toolbar,
                                          text="↻",
@@ -1208,6 +1218,8 @@ class VideoInfoApp:
         self.tree.bind('<Button-3>', self.show_context_menu)
         self.tree.bind('<Motion>', self.on_tree_motion)
         self.tree.bind('<Leave>', self.on_tree_leave)
+        self.tree.configure(takefocus=0)
+        self._disable_treeview_keys()
         self._last_hover_item = None
 
         scrollbar_y = ctk.CTkScrollbar(table_frame, orientation="vertical", command=self.tree.yview)
