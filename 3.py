@@ -1433,9 +1433,14 @@ class VideoInfoApp:
     def open_file_locations(self, items):
         for item in items:
             data = self.item_data_map.get(item)
-            if data:
+            if not data:
+                continue
+            path = os.path.normpath(data['path'])
+            try:
+                subprocess.Popen(f'explorer /select,"{path}"')
+            except Exception:
                 try:
-                    subprocess.Popen(['explorer', '/select,', data['path']])
+                    os.startfile(os.path.dirname(path))
                 except Exception as e:
                     messagebox.showerror(self.t('error'), f"Cannot open location: {e}")
 
