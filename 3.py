@@ -460,6 +460,11 @@ class VideoInfoApp:
             pass
 
     def on_window_configure(self, event):
+        if getattr(self, '_resize_after_id', None):
+            self.root.after_cancel(self._resize_after_id)
+        self._resize_after_id = self.root.after(30, self._do_configure)
+
+    def _do_configure(self):
         current = self.root.geometry()
         if current != self.last_geometry:
             self.last_geometry = current
@@ -1175,9 +1180,10 @@ class VideoInfoApp:
                                          command=self.refresh_current_folder)
         self.btn_refresh.grid(row=0, column=5, padx=(14, 6))
 
-        # Hidden progress bar for scan overlay (top-right of content area)
+        # Progress bar always in top-right, transparent when idle
         self.progress_overlay = ctk.CTkProgressBar(parent, width=200, height=8, corner_radius=4)
         self.progress_overlay.set(0)
+        self.progress_overlay.place(relx=1.0, rely=0.0, anchor='ne', x=-24, y=32)
 
     def _build_table(self, parent):
         c = self._get_tree_colors()
@@ -1273,14 +1279,14 @@ class VideoInfoApp:
                 self.root.attributes('-alpha', step / 5)
                 self.root.after(20, lambda s=step: _fade_out(s - 1))
             else:
-                self.root.withdraw()
+                # Keep window mapped (no withdraw) so CTk/ttk render state is preserved
+                self.root.attributes('-alpha', 0.0)
                 self.theme_mode = 'light' if self.theme_mode != 'light' else 'dark'
                 self.update_theme_by_mode()
                 self.save_config()
                 self.root.update_idletasks()
                 self.root.update()
-                self.root.attributes('-alpha', 0.0)
-                self.root.deiconify()
+                self.root.update_idletasks()
                 _fade_in(1)
 
         def _fade_in(step=1):
@@ -1305,7 +1311,7 @@ class VideoInfoApp:
                 self.root.attributes('-alpha', step / 5)
                 self.root.after(20, lambda s=step: _fade_out(s - 1))
             else:
-                self.root.withdraw()
+                self.root.attributes('-alpha', 0.0)
                 self.lang = 'en' if self.lang == 'zh' else 'zh'
                 self.update_ui_texts()
                 self._refresh_ui_fonts()
@@ -1313,8 +1319,7 @@ class VideoInfoApp:
                 self.save_config()
                 self.root.update_idletasks()
                 self.root.update()
-                self.root.attributes('-alpha', 0.0)
-                self.root.deiconify()
+                self.root.update_idletasks()
                 _fade_in(1)
 
         def _fade_in(step=1):
@@ -1589,7 +1594,6 @@ class VideoInfoApp:
         return 6
 
     def scan_folder(self, folder):
-        self.progress_overlay.place(relx=1.0, rely=0.0, anchor='ne', x=-24, y=32)
         self.progress_overlay.start()
         self.lbl_status.configure(text=self.t('scanning'))
         self.tree.delete(*self.tree.get_children())
@@ -1654,7 +1658,8 @@ class VideoInfoApp:
 
     def scan_finished(self, error_msg, extensions_found=None):
         self.progress_overlay.stop()
-        self.progress_overlay.place_forget()
+        self.progress_overlay.configure(mode='determinate')
+        self.progress_overlay.set(0)
         if error_msg:
             if error_msg == self.t('no_video'):
                 self.lbl_status.configure(text=error_msg)
@@ -2552,5 +2557,8 @@ def _darken(hex_color, factor=0.1):
 if __name__ == "__main__":
     setup_exception_logging()
     root = ctk.CTk()
+    icon_path = Path(__file__).parent / "app_icon.ico"
+    if icon_path.exists():
+        root.iconbitmap(default=str(icon_path))
     app = VideoInfoApp(root)
     root.mainloop()
