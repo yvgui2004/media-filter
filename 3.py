@@ -409,7 +409,7 @@ class VideoInfoApp:
 
     def _default_font(self):
         available = set(font.families())
-        for name in ('宋体', 'SimSun', '微软雅黑', 'Microsoft YaHei', 'Segoe UI'):
+        for name in ('黑体', 'SimHei', '宋体', 'SimSun', '微软雅黑', 'Microsoft YaHei', 'Segoe UI'):
             if name in available:
                 return name
         return 'Segoe UI'
@@ -427,7 +427,7 @@ class VideoInfoApp:
         else:
             self.lang = 'zh'
             self.theme_mode = 'light'
-        self.font_family = '宋体'
+        self.font_family = '黑体'
         self.font_size = 14
 
         if self.geometry_file.exists():
