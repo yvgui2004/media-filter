@@ -12,6 +12,15 @@ pip 依赖:
                           create_card, create_sidebar_button, create_accent_button)
 """
 
+import os
+import subprocess
+import threading
+import time
+import re
+from pathlib import Path
+from queue import Queue
+from tkinter import filedialog, messagebox
+
 import tkinter as tk
 from tkinter import ttk
 from typing import Optional, Callable
@@ -446,3 +455,775 @@ def center_window(window: tk.Toplevel):
     x = (sw - w) // 2
     y = (sh - h) // 2
     window.geometry(f"+{x}+{y}")
+
+
+# ═══════════════════════════════════════════════════════
+# 7. 格式转换弹窗 — FormatConvertDialog
+# ═══════════════════════════════════════════════════════
+
+class FormatConvertDialog:
+    """三步式格式转换弹窗：选格式 → 选预设 → 设置输出 → 执行。
+
+    用法:
+        dlg = FormatConvertDialog(app, file_paths, file_durations)
+        # app 需要有 .t(key) 翻译方法 和 ._get_tree_colors() 配色方法
+    """
+
+    FORMATS = [
+        {'name': 'MP4',  'ext': '.mp4',  'recommended': True},
+        {'name': 'MKV',  'ext': '.mkv',  'recommended': False},
+        {'name': 'WebM', 'ext': '.webm', 'recommended': False},
+        {'name': 'AVI',  'ext': '.avi',  'recommended': False},
+        {'name': 'MOV',  'ext': '.mov',  'recommended': False},
+    ]
+
+    PRESETS = [
+        {
+            'key': 'h265',
+            'label_key': 'format_preset_h265',
+            'desc_key': 'format_preset_h265_desc',
+            'video_codec': 'libx265',
+            'crf': '23',
+            'audio_codec': 'aac',
+            'audio_bitrate': '128k',
+            'extra': '-preset medium',
+        },
+        {
+            'key': 'h264',
+            'label_key': 'format_preset_h264',
+            'desc_key': 'format_preset_h264_desc',
+            'video_codec': 'libx264',
+            'crf': '23',
+            'audio_codec': 'aac',
+            'audio_bitrate': '128k',
+            'extra': '-preset medium',
+        },
+        {
+            'key': 'gpu',
+            'label_key': 'format_preset_gpu',
+            'desc_key': 'format_preset_gpu_desc',
+            'video_codec': 'hevc_nvenc',
+            'crf': '',
+            'audio_codec': 'aac',
+            'audio_bitrate': '128k',
+            'extra': '-hwaccel cuda -preset p7 -tune hq -rc vbr -cq 23 -qmin 18 -qmax 30',
+        },
+        {
+            'key': 'copy',
+            'label_key': 'format_preset_copy',
+            'desc_key': 'format_preset_copy_desc',
+            'video_codec': 'copy',
+            'crf': '',
+            'audio_codec': 'copy',
+            'audio_bitrate': '',
+            'extra': '',
+        },
+        {
+            'key': 'audio',
+            'label_key': 'format_preset_audio',
+            'desc_key': 'format_preset_audio_desc',
+            'video_codec': '',
+            'crf': '',
+            'audio_codec': 'libmp3lame',
+            'audio_bitrate': '192k',
+            'extra': '-vn',
+        },
+    ]
+
+    _PROG_KEYS = ('frame=', 'fps=', 'q=', 'size=', 'out_time', 'dup_frames=',
+                  'drop_frames=', 'progress=', 'bitrate=',
+                  'total_size=', 'stream_', 'out_time_ms=', 'out_time_us=')
+
+    def __init__(self, app, file_paths, file_durations):
+        self.app = app
+        self.file_paths = file_paths
+        self.file_durations = file_durations
+        self.total_duration = sum(file_durations.values())
+        self.running = False
+        self._cancelled = False
+
+        # default selections
+        self.target_format = 'MP4'
+        self.selected_preset = None
+
+        c = self._c()
+        f = app.font_family
+        s = app.font_size
+
+        self.win = ctk.CTkToplevel(app.root)
+        self.win.title(app.t('format_title'))
+        self.win.geometry("820x600")
+        self.win.minsize(700, 550)
+        icon = Path(__file__).parent / "app_icon.ico"
+        if icon.exists():
+            self.win.iconbitmap(bitmap=str(icon), default=str(icon))
+        self.win.transient(app.root)
+        self.win.grab_set()
+        self.win.configure(fg_color=c['bg'])
+
+        apply_mica(self.win, dark=(app.current_theme == 'dark'), bg_color=c['bg'])
+
+        self.win.withdraw()
+        self._build_ui()
+        self._center_on_parent()
+        self.win.deiconify()
+
+        self.win.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Select first preset by default
+        self._on_preset_change(self.PRESETS[0]['key'])
+
+    def _c(self):
+        return self.app._get_tree_colors()
+
+    def _f(self):
+        return self.app.font_family
+
+    def _s(self):
+        return self.app.font_size
+
+    # ── Window close ──────────────────────────────
+    def _on_close(self):
+        if self.running and not self._cancelled:
+            t = self.app.t
+            messagebox.showwarning(t('warning'), t('batch_running_warn'), parent=self.win)
+            return
+        self.win.destroy()
+
+    def _center_on_parent(self):
+        self.win.update_idletasks()
+        root = self.app.root
+        root.update_idletasks()
+        rw = root.winfo_width()
+        rh = root.winfo_height()
+        rx = root.winfo_rootx()
+        ry = root.winfo_rooty()
+        ww = self.win.winfo_width()
+        wh = self.win.winfo_height()
+        x = rx + (rw - ww) // 2
+        y = ry + (rh - wh) // 2
+        self.win.geometry(f"+{x}+{y}")
+
+    # ── Build entire UI (left-right split) ──────
+    def _build_ui(self):
+        c = self._c()
+        f = self._f()
+        s = self._s()
+        t = self.app.t
+
+        # ── Header ──
+        header = ctk.CTkFrame(self.win, fg_color="transparent", corner_radius=0)
+        header.pack(fill=tk.X, padx=24, pady=(18, 10))
+        if getattr(self.app, '_logo', None) is not None:
+            ctk.CTkLabel(header, image=self.app._logo, text="", width=26, height=26) \
+                .pack(side=tk.LEFT, padx=(0, 10))
+        create_label(header, t('format_title'), c, role='fg',
+                     font_family=f, font_size=s, offset=2, bold=True).pack(side=tk.LEFT)
+        create_label(header, t('batch_selected', len(self.file_paths)), c, role='fg2',
+                     font_family=f, font_size=s, offset=-1).pack(side=tk.RIGHT)
+
+        # ── Body: left-right split ──
+        body = ctk.CTkFrame(self.win, fg_color="transparent", corner_radius=0)
+        body.pack(fill=tk.BOTH, expand=True, padx=24, pady=(0, 8))
+        body.grid_columnconfigure(0, weight=0, minsize=380)
+        body.grid_columnconfigure(1, weight=1)
+        body.grid_rowconfigure(0, weight=1)
+
+        # === LEFT: Settings ===
+        left_card = ctk.CTkFrame(body, fg_color=c['card'], corner_radius=10,
+                                 border_width=1, border_color=c['border'])
+        left_card.grid(row=0, column=0, sticky='nsew', padx=(0, 6))
+        left_card.grid_columnconfigure(0, weight=1)
+
+        # -- Format buttons (2 rows: 3 + 2) --
+        fmt_section = ctk.CTkFrame(left_card, fg_color="transparent", corner_radius=0)
+        fmt_section.grid(row=0, column=0, sticky='ew', padx=14, pady=(12, 6))
+
+        create_label(fmt_section, t('format_target'), c, role='fg2',
+                     font_family=f, font_size=s, offset=-1, bold=True).pack(anchor='w', padx=(2, 0))
+
+        self.fmt_buttons = {}
+        rows = [self.FORMATS[:3], self.FORMATS[3:]]
+        for r, row_fmts in enumerate(rows):
+            row_frame = ctk.CTkFrame(fmt_section, fg_color="transparent", corner_radius=0)
+            row_frame.pack(fill=tk.X, pady=(4, 0))
+            for fmt in row_fmts:
+                sel = (fmt['name'] == self.target_format)
+                text = f"★ {fmt['name']}" if fmt['recommended'] else fmt['name']
+                btn = ctk.CTkButton(
+                    row_frame, text=text,
+                    font=(f, s),
+                    fg_color=c['accent'] if sel else c['button_bg'],
+                    hover_color=c['accent_hover'] if sel else c['button_hover'],
+                    text_color=c['accent_text'] if sel else c['fg'],
+                    corner_radius=8,
+                    height=46, width=110,
+                    command=lambda ft=fmt['name']: self._on_format_select(ft))
+                btn.pack(side=tk.LEFT, padx=(0, 6))
+                self.fmt_buttons[fmt['name']] = btn
+
+        create_separator(left_card, c).grid(row=1, column=0, sticky='ew', padx=14, pady=(4, 2))
+
+        # -- Preset radios --
+        preset_section = ctk.CTkFrame(left_card, fg_color="transparent", corner_radius=0)
+        preset_section.grid(row=2, column=0, sticky='ew', padx=14, pady=(4, 4))
+
+        create_label(preset_section, t('format_preset'), c, role='fg2',
+                     font_family=f, font_size=s, offset=-1, bold=True).pack(anchor='w', padx=(2, 0), pady=(0, 4))
+
+        self.preset_buttons = {}
+
+        # Two rows of preset buttons
+        preset_rows = [self.PRESETS[:3], self.PRESETS[3:]]
+        for row_presets in preset_rows:
+            btn_row = ctk.CTkFrame(preset_section, fg_color="transparent", corner_radius=0)
+            btn_row.pack(fill=tk.X, pady=(2, 0))
+            for p in row_presets:
+                btn = ctk.CTkButton(
+                    btn_row, text=self.app.t(p['label_key']),
+                    font=(f, s - 1),
+                    fg_color=c['button_bg'],
+                    hover_color=c['button_hover'],
+                    text_color=c['fg'],
+                    corner_radius=8,
+                    height=42,
+                    command=lambda pk=p['key']: self._on_preset_change(pk))
+                btn.pack(side=tk.LEFT, padx=(0, 4), fill=tk.X, expand=True)
+                self.preset_buttons[p['key']] = btn
+
+        # Dynamic description (shows selected preset's desc)
+        self.preset_desc_label = create_label(
+            preset_section, '', c, role='fg2',
+            font_family=f, font_size=s, offset=-2)
+        self.preset_desc_label.pack(anchor='w', padx=(2, 0), pady=(6, 0))
+
+        create_separator(left_card, c).grid(row=3, column=0, sticky='ew', padx=14, pady=(4, 2))
+
+        # -- Output settings --
+        out_section = ctk.CTkFrame(left_card, fg_color="transparent", corner_radius=0)
+        out_section.grid(row=4, column=0, sticky='ew', padx=14, pady=(4, 12))
+
+        create_label(out_section, t('format_output_dir'), c, role='fg2',
+                     font_family=f, font_size=s, offset=-1, bold=True).pack(anchor='w', padx=(2, 0), pady=(0, 4))
+
+        out_row = ctk.CTkFrame(out_section, fg_color="transparent", corner_radius=0)
+        out_row.pack(fill=tk.X)
+
+        self.outdir_var = tk.StringVar(value=self.app.t('format_same_as_source'))
+        create_entry(out_row, self.outdir_var, c, font_family=f, font_size=s - 1).pack(
+            side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+
+        ctk.CTkButton(out_row, text=t('format_browse'),
+                      font=(f, s - 1),
+                      fg_color=c['button_bg'],
+                      hover_color=c['button_hover'],
+                      text_color=c['fg'],
+                      corner_radius=6,
+                      width=60, height=32,
+                      command=self._browse_output_dir).pack(side=tk.RIGHT)
+
+        self.keep_structure_var = tk.BooleanVar(value=False)
+        ctk.CTkCheckBox(out_section, text=t('format_keep_structure'),
+                        variable=self.keep_structure_var,
+                        font=(f, s - 1),
+                        text_color=c['fg'],
+                        fg_color=c['accent'],
+                        hover_color=c['accent_hover'],
+                        border_color=c['fg2'],
+                        checkmark_color=c['accent_text']).pack(anchor='w', pady=(6, 0))
+
+        # === RIGHT: Monitor ===
+        right_card = ctk.CTkFrame(body, fg_color=c['card'], corner_radius=10,
+                                  border_width=1, border_color=c['border'])
+        right_card.grid(row=0, column=1, sticky='nsew', padx=(6, 0))
+        right_card.grid_columnconfigure(0, weight=1)
+        right_card.grid_rowconfigure(0, weight=0)   # cmd preview
+        right_card.grid_rowconfigure(1, weight=1)   # console
+        right_card.grid_rowconfigure(2, weight=0)   # progress
+
+        # -- Command preview --
+        cmd_card = ctk.CTkFrame(right_card, fg_color=c['surface'], corner_radius=6)
+        cmd_card.grid(row=0, column=0, sticky='ew', padx=12, pady=(12, 6))
+        create_label(cmd_card, '▸ ' + t('format_preview_cmd'), c, role='fg2',
+                     font_family=f, font_size=s, offset=-1, bold=True).pack(anchor='w', padx=10, pady=(8, 2))
+        self.cmd_preview_label = ctk.CTkLabel(
+            cmd_card, text='',
+            text_color=c['fg'],
+            font=(f, s - 1),
+            anchor="w", justify="left",
+            wraplength=370)
+        self.cmd_preview_label.pack(fill=tk.X, padx=10, pady=(0, 8))
+
+        # -- Console --
+        console_card = ctk.CTkFrame(right_card, fg_color=c['surface'], corner_radius=6)
+        console_card.grid(row=1, column=0, sticky='nsew', padx=12, pady=(0, 6))
+        console_card.grid_columnconfigure(0, weight=1)
+        console_card.grid_rowconfigure(0, weight=1)
+
+        self.console_text = ctk.CTkTextbox(
+            console_card, wrap="word",
+            fg_color=c['input_bg'], text_color=c['fg'],
+            font=(f, s - 2),
+            corner_radius=6, border_width=0)
+        self.console_text.grid(row=0, column=0, sticky='nsew', padx=8, pady=(8, 8))
+        self.console_text.configure(state="disabled")
+
+        # -- Progress --
+        prog_card = ctk.CTkFrame(right_card, fg_color=c['surface'], corner_radius=6)
+        prog_card.grid(row=2, column=0, sticky='ew', padx=12, pady=(0, 12))
+
+        self.prog_bar = ctk.CTkProgressBar(prog_card, mode='determinate', height=8, corner_radius=4)
+        self.prog_bar.pack(fill=tk.X, padx=10, pady=(10, 4))
+        self.prog_bar.set(0)
+
+        self.prog_label = ctk.CTkLabel(prog_card, text='',
+                                       text_color=c['fg2'],
+                                       font=(f, s - 2), anchor="w")
+        self.prog_label.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        # ── Buttons ──
+        btn_row = ctk.CTkFrame(self.win, fg_color="transparent", corner_radius=0)
+        btn_row.pack(fill=tk.X, padx=24, pady=(0, 18))
+
+        ctk.CTkButton(btn_row, text=t('format_preview_cmd'),
+                      font=(f, s),
+                      fg_color=c['button_bg'],
+                      hover_color=c['button_hover'],
+                      text_color=c['fg'],
+                      corner_radius=8,
+                      height=38, width=110,
+                      command=self._preview_command).pack(side=tk.LEFT)
+
+        ctk.CTkButton(btn_row, text=t('cancel'),
+                      font=(f, s),
+                      fg_color=c['button_bg'],
+                      hover_color=c['button_hover'],
+                      text_color=c['fg'],
+                      corner_radius=8,
+                      height=38, width=90,
+                      command=self._on_close).pack(side=tk.RIGHT, padx=(8, 0))
+
+        self.run_btn = ctk.CTkButton(btn_row, text=t('format_start'),
+                                     font=(f, s, 'bold'),
+                                     fg_color=c['accent'],
+                                     hover_color=c['accent_hover'],
+                                     text_color=c['accent_text'],
+                                     corner_radius=8,
+                                     height=38, width=130,
+                                     command=self.execute)
+        self.run_btn.pack(side=tk.RIGHT)
+
+    # ═══════════════ Callbacks ═══════════════════
+
+    def _on_format_select(self, fmt):
+        self.target_format = fmt
+        c = self._c()
+        for fname, btn in self.fmt_buttons.items():
+            sel = (fname == fmt)
+            text = f"★ {fname}" if any(
+                ft['name'] == fname and ft['recommended'] for ft in self.FORMATS
+            ) else fname
+            btn.configure(
+                text=text,
+                fg_color=c['accent'] if sel else c['button_bg'],
+                hover_color=c['accent_hover'] if sel else c['button_hover'],
+                text_color=c['accent_text'] if sel else c['fg'])
+        self._update_cmd_preview()
+
+    def _on_preset_change(self, preset_key):
+        self.selected_preset = preset_key
+        c = self._c()
+        for key, btn in self.preset_buttons.items():
+            sel = (key == preset_key)
+            btn.configure(
+                fg_color=c['accent'] if sel else c['button_bg'],
+                hover_color=c['accent_hover'] if sel else c['button_hover'],
+                text_color=c['accent_text'] if sel else c['fg'])
+        for p in self.PRESETS:
+            if p['key'] == preset_key:
+                self.preset_desc_label.configure(text=self.app.t(p['desc_key']))
+                break
+        self._update_cmd_preview()
+
+    def _update_cmd_preview(self):
+        """Regenerate command preview from current settings."""
+        if not self.file_paths:
+            return
+        fp = self.file_paths[0]
+        folder = os.path.dirname(fp)
+        name = os.path.splitext(os.path.basename(fp))[0]
+        target_ext = '.mp3' if self.selected_preset == 'audio' else '.' + self.target_format.lower()
+        out_path = os.path.join(folder, f"{name}_converted{target_ext}")
+        cmd = self._build_command(fp, out_path)
+        self.cmd_preview_label.configure(text=cmd)
+
+    def _browse_output_dir(self):
+        folder = filedialog.askdirectory(title=self.app.t('format_select_dir'), parent=self.win)
+        if folder:
+            self.outdir_var.set(folder)
+
+    # ═══════════════ Command Builder ═════════════
+
+    def _build_command(self, input_path, out_path):
+        """Build ffmpeg command from current format + preset."""
+        preset = next((p for p in self.PRESETS if p['key'] == self.selected_preset), None)
+        if not preset:
+            return '# Select a preset first'
+        parts = ['ffmpeg', '-hide_banner', '-loglevel', 'warning', '-progress', 'pipe:2', '-nostats']
+        if preset['video_codec'] == 'hevc_nvenc':
+            parts.append('-hwaccel cuda')
+        parts.extend(['-i', f'"{input_path}"'])
+        # Video
+        vc = preset['video_codec']
+        if vc == 'copy':
+            parts.append('-c:v copy')
+        elif vc:
+            parts.append(f'-c:v {vc}')
+            if vc in ('libx265', 'libx264'):
+                parts.extend(['-preset', 'medium', '-crf', preset['crf']])
+            elif vc == 'hevc_nvenc':
+                parts.extend(['-preset', 'p7', '-tune', 'hq', '-rc', 'vbr',
+                              '-cq', '23', '-qmin', '18', '-qmax', '30'])
+        # Audio
+        ac = preset['audio_codec']
+        if ac == 'copy':
+            parts.append('-c:a copy')
+        elif ac:
+            parts.extend(['-c:a', ac, '-b:a', preset['audio_bitrate']])
+        else:
+            parts.append('-an')
+        parts.extend(['-movflags', '+faststart'])
+        parts.append(f'"{out_path}"')
+        return ' '.join(parts)
+
+    # ═══════════════ Preview ═════════════════════
+
+    def _preview_command(self):
+        """Show command preview for the first file in console."""
+        self.console_text.configure(state="normal")
+        self.console_text.delete('1.0', tk.END)
+
+        fp = self.file_paths[0]
+        folder = os.path.dirname(fp)
+        name = os.path.splitext(os.path.basename(fp))[0]
+        target_ext = '.mp3' if self.selected_preset == 'audio' else '.' + self.target_format.lower()
+        out_path = os.path.join(folder, f"{name}_converted{target_ext}")
+        cmd = self._build_command(fp, out_path)
+        self._log(f"[Preview] {os.path.basename(fp)}")
+        self._log(f"  {cmd}")
+        if len(self.file_paths) > 1:
+            self._log(f"  ... (+ {len(self.file_paths) - 1} more files)")
+        self.console_text.configure(state="disabled")
+
+    # ═══════════════ Logging ═════════════════════
+
+    def _log(self, msg):
+        self.console_text.configure(state="normal")
+        self.console_text.insert(tk.END, msg + '\n')
+        self.console_text.see(tk.END)
+        self.console_text.configure(state="disabled")
+        self.win.update_idletasks()
+
+    def _show_task(self, seq, total, filename, cmd):
+        """Update command preview with current task."""
+        lines = cmd.split(' -')
+        short = ' -'.join(lines[:3])
+        if len(short) > 130:
+            short = short[:128] + '...'
+        self.cmd_preview_label.configure(text=f"[{seq}/{total}] {filename}\n{short}")
+
+    # ═══════════════ Execution ═══════════════════
+
+    def execute(self):
+        t = self.app.t
+        if not messagebox.askyesno(t('format_start'),
+                                   t('format_confirm', len(self.file_paths)),
+                                   parent=self.win):
+            return
+
+        self.running = True
+        self._cancelled = False
+        self._active_procs = []
+        self._active_outs = {}
+        c = self._c()
+
+        self.run_btn.configure(state="disabled", text=t('batch_running'),
+                               fg_color=c['button_bg'], hover_color=c['button_hover'])
+
+        # Repurpose cancel button
+        for child in self.win.winfo_children():
+            if isinstance(child, ctk.CTkFrame):
+                for sub in child.winfo_children():
+                    if isinstance(sub, ctk.CTkButton):
+                        if sub.cget('text') in (t('cancel'), 'Cancel'):
+                            sub.configure(text=t('cancel'), command=self.cancel_execution)
+                            self._cancel_btn = sub
+                            break
+
+        self.console_text.configure(state="normal")
+        self.console_text.delete('1.0', tk.END)
+        self.console_text.configure(state="disabled")
+        self.prog_bar.set(0)
+        self.prog_bar.configure(mode='determinate')
+        self.prog_label.configure(text=t('batch_eta_unknown'))
+        self._batch_start_time = time.time()
+
+        has_durations = self.total_duration > 0
+        output_dir = self.outdir_var.get()
+        if output_dir == t('format_same_as_source'):
+            output_dir = ''
+        keep_structure = self.keep_structure_var.get()
+        target_ext = '.mp3' if self.selected_preset == 'audio' else '.' + self.target_format.lower()
+
+        def task():
+            ok = 0
+            fail = 0
+            completed_dur = 0.0
+            failed_files = []
+            lock = threading.Lock()
+            active_positions = {}
+            total = len(self.file_paths)
+            num_workers = 2 if total >= 2 else 1
+
+            work_items = []
+            for idx, fp in enumerate(self.file_paths):
+                file_dur = self.file_durations.get(fp, 0)
+                folder = os.path.dirname(fp)
+                name = os.path.splitext(os.path.basename(fp))[0]
+
+                if output_dir and keep_structure:
+                    all_dirs = [os.path.dirname(p) for p in self.file_paths]
+                    common = os.path.commonpath(all_dirs) if len(all_dirs) > 1 else all_dirs[0]
+                    try:
+                        rel = os.path.relpath(fp, common)
+                    except ValueError:
+                        rel = os.path.basename(fp)
+                    rel_dir = os.path.dirname(rel)
+                    out_folder = os.path.join(output_dir, rel_dir) if rel_dir else output_dir
+                    os.makedirs(out_folder, exist_ok=True)
+                    out_path = os.path.join(out_folder, f"{name}{target_ext}")
+                elif output_dir:
+                    out_path = os.path.join(output_dir, f"{name}{target_ext}")
+                else:
+                    out_path = os.path.join(folder, f"{name}{target_ext}")
+
+                # Avoid overwriting source when input ext == target ext
+                if os.path.normpath(out_path) == os.path.normpath(fp):
+                    out_path = os.path.join(folder, f"{name}_converted{target_ext}")
+
+                cmd = self._build_command(fp, out_path)
+                work_items.append({
+                    'fp': fp, 'file_dur': file_dur, 'seq': idx + 1,
+                    'cmd': cmd, 'out_path': out_path,
+                    'filename': os.path.basename(fp),
+                    'is_ffmpeg': True,
+                })
+
+            q = Queue()
+            for item in work_items:
+                q.put(item)
+            for _ in range(num_workers):
+                q.put(None)
+
+            def worker(wid):
+                nonlocal ok, fail, completed_dur, failed_files
+                while True:
+                    item = q.get()
+                    if item is None or self._cancelled:
+                        q.task_done()
+                        break
+
+                    fp = item['fp']
+                    file_dur = item['file_dur']
+                    seq = item['seq']
+                    out_path = item['out_path']
+                    cmd = item['cmd']
+
+                    self.win.after(0, self._log, f"[{seq}/{total}] {item['filename']}")
+                    self.win.after(0, self._log, f"  > {cmd}")
+                    self.win.after(0, lambda s=seq, t=total, fn=item['filename'], c=cmd:
+                                   self._show_task(s, t, fn, c))
+
+                    proc = None
+                    try:
+                        startupinfo = subprocess.STARTUPINFO()
+                        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                        proc = subprocess.Popen(cmd, shell=True,
+                                                stdout=subprocess.DEVNULL,
+                                                stderr=subprocess.PIPE,
+                                                text=True,
+                                                encoding='utf-8', errors='replace',
+                                                startupinfo=startupinfo)
+                        self._active_procs.append(proc)
+                        self._active_outs[wid] = out_path
+
+                        with lock:
+                            active_positions[wid] = 0.0
+
+                        buf = ''
+                        for chunk in iter(lambda: proc.stderr.buffer.read1(4096).decode('utf-8', errors='replace'), ''):
+                            if self._cancelled:
+                                proc.kill()
+                                break
+                            buf += chunk
+                            while '\n' in buf or '\r' in buf:
+                                r_pos = buf.index('\r') if '\r' in buf else 999999
+                                n_pos = buf.index('\n') if '\n' in buf else 999999
+                                pos = min(r_pos, n_pos)
+                                line = buf[:pos]
+                                sk = 1
+                                if buf[pos] == '\r' and pos + 1 < len(buf) and buf[pos + 1] == '\n':
+                                    sk = 2
+                                buf = buf[pos + sk:]
+                                if not line:
+                                    continue
+                                if has_durations and file_dur > 0:
+                                    if line.startswith('out_time='):
+                                        ts = line.split('=', 1)[1]
+                                        m = re.match(r'(\d+):(\d+):(\d+)\.(\d+)', ts)
+                                        if m:
+                                            h, mi, sec, ms = int(m.group(1)), int(m.group(2)), int(m.group(3)), m.group(4)
+                                            t_val = h * 3600 + mi * 60 + sec + int(ms[:3].ljust(3, '0')) / 1000
+                                            with lock:
+                                                active_positions[wid] = min(t_val, file_dur)
+                                                cur_total = completed_dur + sum(active_positions.values())
+                                                fraction = cur_total / self.total_duration
+                                            self.win.after(0, lambda f=fraction: self._update_progress(ok + fail, f))
+                                            continue
+                                if any(line.startswith(k) for k in self._PROG_KEYS):
+                                    continue
+                                if line.startswith('out_time='):
+                                    continue
+                                self.win.after(0, self._log, f"  {line}")
+                        if buf.strip():
+                            self.win.after(0, self._log, f"  {buf.strip()}")
+
+                        proc.wait()
+                        rc = proc.returncode
+
+                        if proc in self._active_procs:
+                            self._active_procs.remove(proc)
+                        self._active_outs.pop(wid, None)
+
+                        if self._cancelled:
+                            if os.path.exists(out_path):
+                                try:
+                                    os.remove(out_path)
+                                    self.win.after(0, self._log, t('batch_deleted_partial'))
+                                except Exception:
+                                    pass
+                            with lock:
+                                active_positions.pop(wid, None)
+                            q.task_done()
+                            break
+
+                        if rc == 0:
+                            with lock:
+                                ok += 1
+                                completed_dur += file_dur
+                                active_positions.pop(wid, None)
+                            self.win.after(0, self._log, "  OK")
+                        else:
+                            with lock:
+                                fail += 1
+                                failed_files.append(fp)
+                                active_positions.pop(wid, None)
+                            self.win.after(0, self._log, f"  FAIL (code {rc})")
+                    except Exception as e:
+                        with lock:
+                            fail += 1
+                            failed_files.append(fp)
+                            active_positions.pop(wid, None)
+                        if proc is not None and proc in self._active_procs:
+                            self._active_procs.remove(proc)
+                        self._active_outs.pop(wid, None)
+                        self.win.after(0, self._log, f"  ERROR: {e}")
+
+                    done = ok + fail
+                    self.win.after(0, lambda d=done: self._update_progress(d))
+                    q.task_done()
+
+            threads = []
+            for wid in range(num_workers):
+                thr = threading.Thread(target=worker, args=(wid,), daemon=True)
+                thr.start()
+                threads.append(thr)
+            for thr in threads:
+                thr.join()
+
+            self.win.after(0, lambda: self._finish(ok, fail, failed_files))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def cancel_execution(self):
+        if not self.running:
+            return
+        self._cancelled = True
+        self._log(self.app.t('batch_cancelling'))
+        for proc in list(self._active_procs):
+            try:
+                proc.kill()
+                self._log(self.app.t('batch_killed_proc'))
+            except Exception:
+                pass
+        self._active_procs.clear()
+
+    def _update_progress(self, done, fraction=None):
+        total = len(self.file_paths)
+        if fraction is not None and self.total_duration > 0:
+            self.prog_bar.set(fraction)
+            pct = round(fraction * 100)
+        else:
+            pct = round(done / total * 100) if total > 0 else 0
+            self.prog_bar.set(done / total if total > 0 else 0)
+        t = self.app.t
+        self.prog_label.configure(text=t('batch_progress', done, total, pct))
+        if 0 <= done < total and hasattr(self, '_batch_start_time'):
+            elapsed = time.time() - self._batch_start_time
+            if fraction is not None and fraction > 0 and self.total_duration > 0:
+                remaining = elapsed / fraction - elapsed
+            elif done > 0:
+                remaining = elapsed / done * (total - done)
+            else:
+                remaining = 0
+            if remaining > 0:
+                if remaining < 60:
+                    eta = f"{round(remaining)}s"
+                elif remaining < 3600:
+                    eta = f"{int(remaining // 60)}m {round(remaining % 60)}s"
+                else:
+                    eta = f"{int(remaining // 3600)}h {int((remaining % 3600) // 60)}m"
+                self.prog_label.configure(
+                    text=self.prog_label.cget('text') + '  |  ' + t('batch_eta', eta))
+
+    def _finish(self, ok, fail, failed_files):
+        self.running = False
+        self._active_procs.clear()
+        self._active_outs.clear()
+        t = self.app.t
+        self.cmd_preview_label.configure(text='Done.')
+        self._log('─' * 50)
+        if self._cancelled:
+            self._log(t('batch_cancelled_summary', ok, fail))
+        else:
+            self._log(t('batch_done', ok, fail))
+        c = self._c()
+        self.run_btn.configure(state="normal", text=t('format_start'),
+                               fg_color=c['accent'], hover_color=c['accent_hover'])
+        if hasattr(self, '_cancel_btn') and self._cancel_btn.winfo_exists():
+            self._cancel_btn.configure(text=t('cancel'), command=self._on_close)
+        if failed_files:
+            msg = t('failed_files_hdr', len(failed_files))
+            for fp in failed_files:
+                msg += f"  {os.path.basename(fp)}\n"
+            self.win.after(100, lambda m=msg: messagebox.showwarning(
+                t('batch_fail_title'), m, parent=self.win))
+        elif ok > 0 and not self._cancelled:
+            msg = t('batch_success_msg', ok)
+            def _cb():
+                if messagebox.askyesno(t('batch_success_title'),
+                                       f"{msg}\n\n{t('batch_success_ask')}",
+                                       parent=self.win):
+                    self.win.destroy()
+                    self.app.refresh_current_folder()
+            self.win.after(150, _cb)

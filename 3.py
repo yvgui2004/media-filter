@@ -13,6 +13,9 @@ import sys
 import re
 
 import customtkinter as ctk
+from PIL import Image
+
+from ui_utils import FormatConvertDialog
 
 try:
     import pywinstyles
@@ -159,8 +162,8 @@ TEXTS = {
         'export_all': "全部",
         'filter_label': "筛选格式",
         'filter_all': "全部格式",
-        'batch_cmd': "批量命令",
-        'batch_title': "批量处理命令",
+        'batch_cmd': "批量压缩",
+        'batch_title': "批量压缩",
         'batch_presets': "预设命令",
         'batch_hint': "可用变量: {input} 输入路径  {output} 输出路径  {name} 文件名(无后缀)  {ext} 后缀  {folder} 所在目录",
         'batch_output_suffix': "输出文件后缀",
@@ -173,7 +176,6 @@ TEXTS = {
         'batch_progress': "进度: {}/{} ({}%)",
         'batch_eta': "预计剩余: {}",
         'batch_eta_unknown': "预计剩余: 计算中...",
-        'history_cmd': "历史命令：",
         'batch_cancelling': "⚠ 正在取消...",
         'batch_killed_proc': "  已终止一个进程",
         'batch_deleted_partial': "  已删除未完成的输出文件",
@@ -184,6 +186,26 @@ TEXTS = {
         'batch_success_msg': "全部 {} 个文件处理成功！",
         'batch_success_ask': "是否返回主页面并刷新文件夹？",
         'failed_files_hdr': "以下 {} 个文件处理失败：\n\n",
+        'format_convert': "格式转换",
+        'format_title': "转换媒体格式",
+        'format_target': "目标格式",
+        'format_preset': "快速预设",
+        'format_preset_h265': "H.265 压缩 — 画质优先",
+        'format_preset_h264': "H.264 兼容 — 通用推荐",
+        'format_preset_copy': "无损封装 — 仅换容器",
+        'format_preset_gpu': "GPU 加速 — NVENC",
+        'format_preset_audio': "仅提取音频 → MP3",
+        'format_advanced': "高级选项",
+        'format_output_dir': "输出目录",
+        'format_keep_structure': "保持原始目录结构",
+        'format_preview_cmd': "预览命令",
+        'format_start': "开始转换",
+        'format_output_format': "输出格式",
+        'format_browse': "浏览",
+        'format_same_as_source': "源文件同目录",
+        'format_no_files': "请先在列表中勾选要处理的文件",
+        'format_confirm': "将对 {} 个文件执行格式转换，确定继续？",
+        'format_select_dir': "选择输出目录",
         # Preset labels & comments
         'preset_x265_crf23_label': '压缩75% (x265 CRF23 软编)',
         'preset_x265_crf23_comment': '# 文件压缩至75%原始大小, 尽量保持画质, 软件x265编码, 多线程',
@@ -195,6 +217,12 @@ TEXTS = {
         'preset_nvenc_hevc_cq26_comment': '# GPU硬件加速(NVIDIA独立显卡)压缩50%, HEVC编码, 速度快',
         'preset_nvenc_h264_label': 'GPU转H.264 (NVENC 兼容优先)',
         'preset_nvenc_h264_comment': '# GPU硬件加速(NVIDIA独立显卡)转H.264, 兼容性广, 保持画质',
+        # Format convert preset descriptions
+        'format_preset_h265_desc': '画质优先，体积小 — CPU 软编码，兼容性最佳',
+        'format_preset_h264_desc': '兼容性好，通用场景 — 老旧设备也能播放',
+        'format_preset_gpu_desc': 'NVIDIA 硬件加速，5-10 倍速度 — 需独显',
+        'format_preset_copy_desc': '仅更换容器格式，秒级完成 — 不重新编码',
+        'format_preset_audio_desc': '仅提取音频，转为 MP3 — 不保留视频',
     },
     'en': {
         'title': "Media Stats v2.4.0 · A (GitHub)",
@@ -275,8 +303,8 @@ TEXTS = {
         'export_all': "All",
         'filter_label': "Filter",
         'filter_all': "All Formats",
-        'batch_cmd': "Batch Command",
-        'batch_title': "Batch Process Command",
+        'batch_cmd': "Batch Compress",
+        'batch_title': "Batch Compress",
         'batch_presets': "Presets",
         'batch_hint': "Variables: {input} in path  {output} out path  {name} name(no ext)  {ext} extension  {folder} directory",
         'batch_output_suffix': "Output suffix",
@@ -289,7 +317,6 @@ TEXTS = {
         'batch_progress': "Progress: {}/{} ({}%)",
         'batch_eta': "ETA: {}",
         'batch_eta_unknown': "ETA: calculating...",
-        'history_cmd': "History:",
         'batch_cancelling': "⚠ Cancelling...",
         'batch_killed_proc': "  Killed one process",
         'batch_deleted_partial': "  Deleted incomplete output file",
@@ -300,6 +327,32 @@ TEXTS = {
         'batch_success_msg': "All {} file(s) processed successfully!",
         'batch_success_ask': "Return to main page and refresh folder?",
         'failed_files_hdr': "Following {} file(s) failed:\n\n",
+        'format_convert': "Format Convert",
+        'format_title': "Convert Format",
+        'format_target': "Target Format",
+        'format_preset': "Quick Preset",
+        'format_preset_h265': "H.265 Compress — Quality",
+        'format_preset_h264': "H.264 Compatible — Recommended",
+        'format_preset_copy': "Lossless Remux — Container Only",
+        'format_preset_gpu': "GPU Accelerated — NVENC",
+        'format_preset_audio': "Extract Audio → MP3",
+        'format_advanced': "Advanced",
+        'format_output_dir': "Output Dir",
+        'format_keep_structure': "Keep folder structure",
+        'format_preview_cmd': "Preview",
+        'format_start': "Start Convert",
+        'format_output_format': "Output Format",
+        'format_browse': "Browse",
+        'format_same_as_source': "Same as source",
+        'format_no_files': "Please check files in the list first",
+        'format_confirm': "Convert format of {} file(s), continue?",
+        'format_select_dir': "Select output directory",
+        # Format convert preset descriptions
+        'format_preset_h265_desc': 'Quality-first, small size — CPU encoding, best compatibility',
+        'format_preset_h264_desc': 'High compatibility, general use — plays on old devices',
+        'format_preset_gpu_desc': 'NVIDIA hardware, 5-10x faster — requires discrete GPU',
+        'format_preset_copy_desc': 'Remux only, seconds to finish — no re-encoding',
+        'format_preset_audio_desc': 'Extract audio to MP3 — no video track',
         # Preset labels & comments
         'preset_x265_crf23_label': 'Compress 75% (x265 CRF23 CPU)',
         'preset_x265_crf23_comment': '# Compress to 75% size, maintain quality, CPU x265 encoding, multi-thread',
@@ -353,6 +406,15 @@ class VideoInfoApp:
         base_dir = Path(sys.executable if getattr(sys, 'frozen', False) else __file__).parent
         self.config_file = base_dir / "config.json"
         self.geometry_file = base_dir / "window_geometry.json"
+        # 应用内 Logo（左上角）
+        self._logo = None
+        _icon = base_dir / "app_icon.ico"
+        if _icon.exists():
+            try:
+                _pil = Image.open(_icon).convert("RGBA")
+                self._logo = ctk.CTkImage(light_image=_pil, dark_image=_pil, size=(26, 26))
+            except Exception:
+                self._logo = None
         self.load_config()
 
         # Sync current_theme with loaded theme_mode
@@ -363,8 +425,8 @@ class VideoInfoApp:
 
         self.root.title(self.t('title'))
         self.root.withdraw()
-        self.root.geometry(self.saved_geometry if hasattr(self, 'saved_geometry') else "1200x780")
-        self.root.minsize(850, 680)
+        self.root.geometry(self.saved_geometry if hasattr(self, 'saved_geometry') else "1111x720")
+        self.root.minsize(1111, 720)
         self.root.resizable(True, True)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.bind("<Configure>", self.on_window_configure)
@@ -396,6 +458,7 @@ class VideoInfoApp:
         if self.saved_geometry and '+' not in self.saved_geometry:
             self.center_window(self.root)
         self.root.deiconify()
+        self.root.after(100, self._apply_sidebar_width)
 
         if self.theme_mode == 'auto':
             self.schedule_theme_check()
@@ -434,11 +497,11 @@ class VideoInfoApp:
             try:
                 with open(self.geometry_file, 'r', encoding='utf-8') as f:
                     geo_data = json.load(f)
-                    self.saved_geometry = geo_data.get('main', '1200x780')
+                    self.saved_geometry = geo_data.get('main', '1111x720')
             except:
-                self.saved_geometry = '1200x780'
+                self.saved_geometry = '1111x720'
         else:
-            self.saved_geometry = '1200x780'
+            self.saved_geometry = '1111x720'
 
     def save_config(self):
         config = {
@@ -499,7 +562,7 @@ class VideoInfoApp:
         c = self._get_tree_colors()
         if hasattr(self, 'sidebar') and self.sidebar.winfo_exists():
             try:
-                self.sidebar.master.configure(fg_color=c['bg'])
+                self._sidebar_wrapper.configure(bg=c['surface'])
                 self.sidebar.configure(fg_color=c['surface'])
             except Exception:
                 pass
@@ -565,7 +628,7 @@ class VideoInfoApp:
         """Force-set known widgets to theme colors. No cget, no matching."""
         _NORMAL_BTNS = [
             'btn_select_all', 'btn_deselect_all', 'btn_export', 'btn_batch',
-            'btn_theme', 'btn_lang', 'btn_order', 'btn_refresh',
+            'btn_format', 'btn_theme', 'btn_lang', 'btn_order', 'btn_refresh',
         ]
         for name in _NORMAL_BTNS:
             btn = getattr(self, name, None)
@@ -579,7 +642,7 @@ class VideoInfoApp:
                                     hover_color=c['accent_hover'])
         # Sidebar / toolbar / statusbar labels — fg2 (secondary text)
         for attr in ('lbl_stats_heading', 'lbl_sel_heading',
-                     'lbl_app_subtitle', 'lbl_folder_label',
+                     'lbl_app_subtitle',
                      'lbl_sort', 'lbl_filter', 'lbl_status', 'lbl_hint'):
             lbl = getattr(self, attr, None)
             if lbl is not None and lbl.winfo_exists():
@@ -595,9 +658,6 @@ class VideoInfoApp:
             card = getattr(self, attr, None)
             if card is not None and card.winfo_exists():
                 card.configure(fg_color=c['card'])
-        if hasattr(self, 'separator') and self.separator.winfo_exists():
-            self.separator.configure(fg_color=c['border'])
-
     def _update_pywinstyles(self):
         if not HAS_PYWINSTYLES:
             return
@@ -770,8 +830,8 @@ class VideoInfoApp:
 
     # ---------- Font ----------
     _BASE_FONT_SIZE = 14
-    _BASE_MIN_WIDTH = 1050
-    _BASE_MIN_HEIGHT = 780
+    _BASE_MIN_WIDTH = 1111
+    _BASE_MIN_HEIGHT = 720
 
     def apply_font_to_all(self, snap=False):
         default_font = (self.font_family, self.font_size)
@@ -809,35 +869,35 @@ class VideoInfoApp:
             return (f, s + offset, 'bold') if bold else (f, s + offset)
 
         if hasattr(self, 'lbl_app_title'):
-            self.lbl_app_title.configure(font=_font(1, bold=True))
+            self.lbl_app_title.configure(font=_font(4, bold=True))
             self.lbl_app_subtitle.configure(font=_font(-1))
             self.btn_open.configure(font=_font(0, bold=True))
-            self.lbl_folder_label.configure(font=_font(-1))
-            self.lbl_folder.configure(font=_font(0))
+            self.lbl_folder.configure(font=_font(-1))
             self.lbl_stats_heading.configure(font=_font(-1, bold=True))
-            self.lbl_stats_total.configure(font=_font(0))
-            self.lbl_stats_duration.configure(font=_font(0))
-            self.lbl_stats_size.configure(font=_font(0))
+            self.lbl_stats_total.configure(font=_font(0, bold=True))
+            self.lbl_stats_duration.configure(font=_font(-1))
+            self.lbl_stats_size.configure(font=_font(-1))
             self.lbl_sel_heading.configure(font=_font(-1, bold=True))
-            self.lbl_sel_count.configure(font=_font(0))
-            self.lbl_sel_duration.configure(font=_font(0))
-            self.lbl_sel_size.configure(font=_font(0))
-            self.btn_select_all.configure(font=_font(0))
-            self.btn_deselect_all.configure(font=_font(0))
+            self.lbl_sel_count.configure(font=_font(0, bold=True))
+            self.lbl_sel_duration.configure(font=_font(-1))
+            self.lbl_sel_size.configure(font=_font(-1))
+            self.btn_select_all.configure(font=_font(-1))
+            self.btn_deselect_all.configure(font=_font(-1))
             self.btn_export.configure(font=_font(0, bold=True))
-            self.btn_batch.configure(font=_font(-1))
-            self.btn_theme.configure(font=_font(5))
+            self.btn_batch.configure(font=_font(0))
+            self.btn_format.configure(font=_font(0))
+            self.btn_theme.configure(font=_font(4))
             self.btn_lang.configure(font=_font(0, bold=True))
         if hasattr(self, 'lbl_sort'):
-            self.lbl_sort.configure(font=_font(0))
-            self.lbl_filter.configure(font=_font(0))
-            self.btn_order.configure(font=_font(0))
-            self.combo_sort.configure(font=_font(0))
-            self.combo_filter.configure(font=_font(0))
-            self.btn_refresh.configure(font=_font(1))
+            self.lbl_sort.configure(font=_font(1))
+            self.lbl_filter.configure(font=_font(1))
+            self.btn_order.configure(font=_font(1))
+            self.combo_sort.configure(font=_font(1))
+            self.combo_filter.configure(font=_font(1))
+            self.btn_refresh.configure(font=_font(2))
         if hasattr(self, 'lbl_status'):
-            self.lbl_status.configure(font=_font(-1))
-            self.lbl_hint.configure(font=_font(-1))
+            self.lbl_status.configure(font=_font(0))
+            self.lbl_hint.configure(font=_font(0))
 
     def update_ui_texts(self):
         self.root.title(self.t('title'))
@@ -849,7 +909,8 @@ class VideoInfoApp:
         self.btn_open.configure(text=self.t('select_folder'))
         self.btn_export.configure(text=self.t('export_txt'))
         self.btn_batch.configure(text=self.t('batch_cmd'))
-        self.lbl_folder_label.configure(text=self.t('open_folder'))
+        if hasattr(self, 'btn_format'):
+            self.btn_format.configure(text=self.t('format_convert'))
         self.lbl_folder.configure(text=self.t('no_folder'))
         self.lbl_stats_heading.configure(text=self.t('folder_stats'))
         self.lbl_sel_heading.configure(text=self.t('selection_stats'))
@@ -905,18 +966,21 @@ class VideoInfoApp:
 
         master = ctk.CTkFrame(self.root, corner_radius=0, fg_color=c['bg'])
         master.grid(row=0, column=0, sticky='nsew')
-        master.grid_columnconfigure(1, weight=1)
+        master.grid_columnconfigure(0, weight=0)  # sidebar
+        master.grid_columnconfigure(1, weight=1)  # content
         master.grid_rowconfigure(0, weight=1)
 
-        self._sidebar_width = 240
-        self.sidebar = ctk.CTkFrame(master, width=self._sidebar_width, corner_radius=0,
-                                    fg_color=c['surface'])
-        self.sidebar.grid(row=0, column=0, sticky='nsw')
-        self.sidebar.grid_propagate(False)
-        self._build_sidebar()
+        self._sidebar_width = 200
+        # tk.Frame wrapper — respects grid_propagate(False), CTkFrame doesn't
+        self._sidebar_wrapper = tk.Frame(master, width=self._sidebar_width, bg=c['surface'])
+        self._sidebar_wrapper.grid(row=0, column=0, sticky='ns')
+        self._sidebar_wrapper.grid_propagate(False)
+        self._sidebar_wrapper.grid_columnconfigure(0, weight=1)
+        self._sidebar_wrapper.grid_rowconfigure(0, weight=1)
 
-        self.separator = ctk.CTkFrame(master, width=1, corner_radius=0, fg_color=c['border'])
-        self.separator.grid(row=0, column=0, sticky='nse', padx=(self._sidebar_width, 0))
+        self.sidebar = ctk.CTkFrame(self._sidebar_wrapper, corner_radius=0, fg_color=c['surface'])
+        self.sidebar.grid(row=0, column=0, sticky='nsew')
+        self._build_sidebar()
 
         self.content_frame = ctk.CTkFrame(master, corner_radius=0, fg_color=c['bg'])
         self.content_frame.grid(row=0, column=1, sticky='nsew')
@@ -928,191 +992,189 @@ class VideoInfoApp:
         self._build_statusbar(self.content_frame)
 
         self.root.bind("<Configure>", self._on_sidebar_resize, add='+')
+        # Force sidebar width after everything is laid out
+        self.root.after(200, self._apply_sidebar_width)
         import ctypes
         ctypes.windll.imm32.ImmAssociateContext(self.root.winfo_id(), None)
 
+    def _apply_sidebar_width(self):
+        """Apply sidebar width based on current window size."""
+        w = self.root.winfo_width()
+        if w > 10:
+            new_w = max(180, min(280, round(w * 0.20)))
+            self._sidebar_width = new_w
+            self._sidebar_wrapper.configure(width=new_w)
+
     def _build_sidebar(self):
         c = self._get_tree_colors()
+        f = self.font_family
+        s = self.font_size
 
+        # -- Header --
         header = ctk.CTkFrame(self.sidebar, fg_color="transparent", corner_radius=0)
-        header.pack(fill=tk.X, padx=16, pady=(16, 8))
-
-        self.lbl_app_title = ctk.CTkLabel(header, text=self.t('app_title'),
-                                          font=(self.font_family, self.font_size + 1, 'bold'),
-                                          text_color=c['fg'],
-                                          anchor="w")
-        self.lbl_app_title.pack(fill=tk.X)
+        header.pack(fill=tk.X, padx=10, pady=(16, 8))
+        title_row = ctk.CTkFrame(header, fg_color="transparent", corner_radius=0)
+        title_row.pack(fill=tk.X)
+        if getattr(self, '_logo', None) is not None:
+            ctk.CTkLabel(title_row, image=self._logo, text="", width=26, height=26) \
+                .pack(side=tk.LEFT, padx=(0, 8))
+        self.lbl_app_title = ctk.CTkLabel(title_row, text=self.t('app_title'),
+                                          font=(f, s + 4, 'bold'),
+                                          text_color=c['fg'], anchor="w")
+        self.lbl_app_title.pack(side=tk.LEFT)
         self.lbl_app_subtitle = ctk.CTkLabel(header, text=self.t('app_subtitle'),
-                                             font=(self.font_family, self.font_size - 1),
-                                             text_color=c['fg2'],
-                                             anchor="w")
+                                             font=(f, s),
+                                             text_color=c['fg2'], anchor="w")
         self.lbl_app_subtitle.pack(fill=tk.X)
 
         sep1 = ctk.CTkFrame(self.sidebar, height=1, corner_radius=0, fg_color=c['border'])
-        sep1.pack(fill=tk.X, padx=16, pady=(12, 16))
+        sep1.pack(fill=tk.X, padx=10, pady=(10, 14))
 
-        self.btn_open = ctk.CTkButton(self.sidebar,
-                                       text=self.t('select_folder'),
-                                       font=(self.font_family, self.font_size, 'bold'),
+        # -- Open folder (accent) --
+        self.btn_open = ctk.CTkButton(self.sidebar, text=self.t('select_folder'),
+                                       font=(f, s, 'bold'),
                                        fg_color=c['accent'],
                                        hover_color=c['accent_hover'],
                                        text_color=c['accent_text'],
-                                       corner_radius=6,
-                                       height=38,
+                                       corner_radius=8, height=40,
                                        command=self.select_folder)
-        self.btn_open.pack(fill=tk.X, padx=16, pady=(0, 12))
+        self.btn_open.pack(fill=tk.X, padx=10, pady=(0, 10))
 
-        self.lbl_folder_label = ctk.CTkLabel(self.sidebar,
-                                             text=self.t('open_folder'),
-                                             font=(self.font_family, self.font_size - 1),
-                                             text_color=c['fg2'],
-                                             anchor="w")
-        self.lbl_folder_label.pack(fill=tk.X, padx=16, pady=(0, 2))
-        self.lbl_folder = ctk.CTkLabel(self.sidebar,
-                                       text=self.t('no_folder'),
-                                       font=(self.font_family, self.font_size),
+        # -- Current folder path --
+        self.lbl_folder = ctk.CTkLabel(self.sidebar, text=self.t('no_folder'),
+                                       font=(f, s - 1),
                                        text_color=c['fg'],
-                                       anchor="w", justify="left",
-                                       wraplength=208)
-        self.lbl_folder.pack(fill=tk.X, padx=16, pady=(0, 4))
+                                       anchor="w", justify="left")
+        self.lbl_folder.pack(fill=tk.X, padx=10, pady=(0, 4))
 
         sep2 = ctk.CTkFrame(self.sidebar, height=1, corner_radius=0, fg_color=c['border'])
-        sep2.pack(fill=tk.X, padx=16, pady=(12, 12))
+        sep2.pack(fill=tk.X, padx=10, pady=(10, 10))
 
-        # Folder Stats card
+        # -- Folder Stats card --
         self.stats_card = ctk.CTkFrame(self.sidebar, fg_color=c['card'], corner_radius=8)
-        self.stats_card.pack(fill=tk.X, padx=12, pady=(0, 8))
+        self.stats_card.pack(fill=tk.X, padx=10, pady=(0, 6))
 
         self.lbl_stats_heading = ctk.CTkLabel(self.stats_card,
                                               text=self.t('folder_stats'),
-                                              font=(self.font_family, self.font_size - 1, 'bold'),
-                                              text_color=c['fg2'],
-                                              anchor="w")
-        self.lbl_stats_heading.pack(fill=tk.X, padx=12, pady=(10, 6))
+                                              font=(f, s, 'bold'),
+                                              text_color=c['fg2'], anchor="w")
+        self.lbl_stats_heading.pack(fill=tk.X, padx=10, pady=(8, 6))
 
         self.lbl_stats_total = ctk.CTkLabel(self.stats_card,
                                             text=self.t('total_files', 0),
-                                            font=(self.font_family, self.font_size),
-                                            text_color=c['fg'],
-                                            anchor="w")
-        self.lbl_stats_total.pack(fill=tk.X, padx=12, pady=(0, 3))
+                                            font=(f, s, 'bold'),
+                                            text_color=c['fg'], anchor="w")
+        self.lbl_stats_total.pack(fill=tk.X, padx=10, pady=(0, 2))
 
         self.lbl_stats_duration = ctk.CTkLabel(self.stats_card,
                                                text=self.t('total_duration', '00:00:00'),
-                                               font=(self.font_family, self.font_size),
-                                               text_color=c['fg'],
-                                               anchor="w")
-        self.lbl_stats_duration.pack(fill=tk.X, padx=12, pady=(0, 3))
+                                               font=(f, s),
+                                               text_color=c['fg2'], anchor="w")
+        self.lbl_stats_duration.pack(fill=tk.X, padx=10, pady=(0, 2))
 
         self.lbl_stats_size = ctk.CTkLabel(self.stats_card,
                                            text=f"{self.t('size_label')}: 0 B",
-                                           font=(self.font_family, self.font_size),
-                                           text_color=c['fg'],
-                                           anchor="w")
-        self.lbl_stats_size.pack(fill=tk.X, padx=12, pady=(0, 10))
+                                           font=(f, s),
+                                           text_color=c['fg2'], anchor="w")
+        self.lbl_stats_size.pack(fill=tk.X, padx=10, pady=(0, 8))
 
-        # Selection Stats card
+        # -- Selection Stats card --
         self.sel_card = ctk.CTkFrame(self.sidebar, fg_color=c['card'], corner_radius=8)
-        self.sel_card.pack(fill=tk.X, padx=12, pady=(0, 12))
+        self.sel_card.pack(fill=tk.X, padx=10, pady=(0, 10))
 
         self.lbl_sel_heading = ctk.CTkLabel(self.sel_card,
                                             text=self.t('selection_stats'),
-                                            font=(self.font_family, self.font_size - 1, 'bold'),
-                                            text_color=c['fg2'],
-                                            anchor="w")
-        self.lbl_sel_heading.pack(fill=tk.X, padx=12, pady=(10, 6))
+                                            font=(f, s, 'bold'),
+                                            text_color=c['fg2'], anchor="w")
+        self.lbl_sel_heading.pack(fill=tk.X, padx=10, pady=(8, 6))
 
         self.lbl_sel_count = ctk.CTkLabel(self.sel_card,
                                           text=f"0 {self.t('videos')}",
-                                          font=(self.font_family, self.font_size),
-                                          text_color=c['fg'],
-                                          anchor="w")
-        self.lbl_sel_count.pack(fill=tk.X, padx=12, pady=(0, 3))
+                                          font=(f, s, 'bold'),
+                                          text_color=c['fg'], anchor="w")
+        self.lbl_sel_count.pack(fill=tk.X, padx=10, pady=(0, 2))
 
         self.lbl_sel_duration = ctk.CTkLabel(self.sel_card,
                                              text=f"{self.t('duration_label')}: 00:00:00",
-                                             font=(self.font_family, self.font_size),
-                                             text_color=c['fg'],
-                                             anchor="w")
-        self.lbl_sel_duration.pack(fill=tk.X, padx=12, pady=(0, 3))
+                                             font=(f, s),
+                                             text_color=c['fg2'], anchor="w")
+        self.lbl_sel_duration.pack(fill=tk.X, padx=10, pady=(0, 2))
 
         self.lbl_sel_size = ctk.CTkLabel(self.sel_card,
                                          text=f"{self.t('size_label')}: 0 B",
-                                         font=(self.font_family, self.font_size),
-                                         text_color=c['fg'],
-                                         anchor="w")
-        self.lbl_sel_size.pack(fill=tk.X, padx=12, pady=(0, 10))
+                                         font=(f, s),
+                                         text_color=c['fg2'], anchor="w")
+        self.lbl_sel_size.pack(fill=tk.X, padx=10, pady=(0, 8))
 
-        # Quick selection buttons
-        self.btn_select_all = ctk.CTkButton(self.sidebar,
-                                            text=self.t('select_all'),
-                                            font=(self.font_family, self.font_size),
+        # -- Select / Deselect side-by-side --
+        sel_row = ctk.CTkFrame(self.sidebar, fg_color="transparent", corner_radius=0)
+        sel_row.pack(fill=tk.X, padx=10, pady=(0, 6))
+        sel_row.grid_columnconfigure(0, weight=1, uniform='sel')
+        sel_row.grid_columnconfigure(1, weight=1, uniform='sel')
+        self.btn_select_all = ctk.CTkButton(sel_row, text=self.t('select_all'),
+                                            font=(f, s),
                                             fg_color=c['button_bg'],
                                             hover_color=c['button_hover'],
                                             text_color=c['fg'],
-                                            corner_radius=6,
-                                            height=34,
+                                            corner_radius=6, height=30,
                                             command=self.select_all)
-        self.btn_select_all.pack(fill=tk.X, padx=16, pady=(0, 6))
-
-        self.btn_deselect_all = ctk.CTkButton(self.sidebar,
-                                              text=self.t('deselect_all'),
-                                              font=(self.font_family, self.font_size),
+        self.btn_select_all.grid(row=0, column=0, sticky='ew', padx=(0, 3))
+        self.btn_deselect_all = ctk.CTkButton(sel_row, text=self.t('deselect_all'),
+                                              font=(f, s),
                                               fg_color=c['button_bg'],
                                               hover_color=c['button_hover'],
                                               text_color=c['fg'],
-                                              corner_radius=6,
-                                              height=34,
+                                              corner_radius=6, height=30,
                                               command=self.deselect_all)
-        self.btn_deselect_all.pack(fill=tk.X, padx=16, pady=(0, 6))
+        self.btn_deselect_all.grid(row=0, column=1, sticky='ew', padx=(3, 0))
 
-        self.btn_export = ctk.CTkButton(self.sidebar,
-                                        text=self.t('export_txt'),
-                                        font=(self.font_family, self.font_size, 'bold'),
+        # -- Action buttons --
+        self.btn_export = ctk.CTkButton(self.sidebar, text=self.t('export_txt'),
+                                        font=(f, s, 'bold'),
                                         fg_color=c['button_bg'],
                                         hover_color=c['button_hover'],
                                         text_color=c['fg'],
-                                        corner_radius=6,
-                                        height=36,
+                                        corner_radius=6, height=34,
                                         command=self.export_txt)
-        self.btn_export.pack(fill=tk.X, padx=16, pady=(4, 6))
+        self.btn_export.pack(fill=tk.X, padx=10, pady=(2, 6))
 
-        self.btn_batch = ctk.CTkButton(self.sidebar,
-                                        text=self.t('batch_cmd'),
-                                        font=(self.font_family, self.font_size - 1),
+        self.btn_batch = ctk.CTkButton(self.sidebar, text=self.t('batch_cmd'),
+                                        font=(f, s),
                                         fg_color=c['button_bg'],
                                         hover_color=c['button_hover'],
                                         text_color=c['fg'],
-                                        corner_radius=6,
-                                        height=34,
+                                        corner_radius=6, height=34,
                                         command=self.open_batch_command)
-        self.btn_batch.pack(fill=tk.X, padx=16, pady=(0, 12))
+        self.btn_batch.pack(fill=tk.X, padx=10, pady=(0, 6))
 
-        # Bottom theme/language row (directly below batch button)
+        self.btn_format = ctk.CTkButton(self.sidebar, text=self.t('format_convert'),
+                                        font=(f, s),
+                                        fg_color=c['button_bg'],
+                                        hover_color=c['button_hover'],
+                                        text_color=c['fg'],
+                                        corner_radius=6, height=34,
+                                        command=self.open_format_convert)
+        self.btn_format.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        # -- Bottom: theme + language --
         bottom_row = ctk.CTkFrame(self.sidebar, fg_color="transparent", corner_radius=0)
-        bottom_row.pack(fill=tk.X, padx=16, pady=(0, 8))
+        bottom_row.pack(fill=tk.X, padx=10, pady=(0, 8))
 
-        self.btn_theme = ctk.CTkButton(bottom_row,
-                                       text='☾',
-                                       font=(self.font_family, self.font_size + 5),
+        self.btn_theme = ctk.CTkButton(bottom_row, text='☾',
+                                       font=(f, s + 3),
                                        fg_color=c['button_bg'],
                                        hover_color=c['button_hover'],
                                        text_color=c['fg'],
-                                       corner_radius=6,
-                                       width=44,
-                                       height=34,
+                                       corner_radius=6, width=44, height=34,
                                        command=self.cycle_theme)
         self.btn_theme.pack(side=tk.LEFT, padx=(0, 8))
 
-        self.btn_lang = ctk.CTkButton(bottom_row,
-                                      text='EN' if self.lang == 'zh' else '中',
-                                      font=(self.font_family, self.font_size, 'bold'),
+        self.btn_lang = ctk.CTkButton(bottom_row, text='EN' if self.lang == 'zh' else '中',
+                                      font=(f, s, 'bold'),
                                       fg_color=c['button_bg'],
                                       hover_color=c['button_hover'],
                                       text_color=c['fg'],
-                                      corner_radius=6,
-                                      width=44,
-                                      height=34,
+                                      corner_radius=6, width=44, height=34,
                                       command=self.toggle_language)
         self.btn_lang.pack(side=tk.LEFT)
 
@@ -1263,14 +1325,11 @@ class VideoInfoApp:
         if cur_w == self._last_root_width:
             return
         self._last_root_width = cur_w
-        new_w = max(220, min(380, round(cur_w * 0.22)))
+        new_w = max(180, min(280, round(cur_w * 0.20)))
         if new_w == self._sidebar_width:
             return
         self._sidebar_width = new_w
-        self.sidebar.configure(width=new_w)
-        self.separator.grid_configure(padx=(new_w, 0))
-        if hasattr(self, 'lbl_folder'):
-            self.lbl_folder.configure(wraplength=new_w - 32)
+        self._sidebar_wrapper.configure(width=new_w)
 
     # ---------- Theme cycling ----------
     def cycle_theme(self):
@@ -1572,7 +1631,9 @@ class VideoInfoApp:
         folder = filedialog.askdirectory(title=self.t('select_folder'))
         if folder:
             self.current_folder = folder
-            self.lbl_folder.configure(text=folder)
+            # Break at each \, with shorter wraplength for long segments
+            path = folder.replace('\\', '\\\n')
+            self.lbl_folder.configure(text=path, wraplength=self._sidebar_width - 100)
             self.scan_folder(folder)
 
     def refresh_current_folder(self):
@@ -1943,6 +2004,19 @@ class VideoInfoApp:
             return
         BatchCommandDialog(self, checked_paths, file_durations)
 
+    def open_format_convert(self):
+        checked_paths = []
+        file_durations = {}
+        for item_id in self.tree.get_children():
+            data = self.item_data_map.get(item_id)
+            if data and data['checked'].get():
+                checked_paths.append(data['path'])
+                file_durations[data['path']] = data['duration_sec']
+        if not checked_paths:
+            messagebox.showwarning(self.t('warning'), self.t('format_no_files'))
+            return
+        FormatConvertDialog(self, checked_paths, file_durations)
+
 
 class BatchCommandDialog:
     PRESETS = [
@@ -1993,14 +2067,13 @@ class BatchCommandDialog:
         self.total_duration = sum(file_durations.values())
         self.running = False
 
-        base_dir = Path(sys.executable if getattr(sys, 'frozen', False) else __file__).parent
-        self.history_file = base_dir / "cmd_history.json"
-        self._cmd_history = self._load_history()
-
         self.win = ctk.CTkToplevel(app.root)
         self.win.title(app.t('batch_title'))
-        self.win.geometry("680x600")
-        self.win.minsize(520, 500)
+        self.win.geometry("820x600")
+        icon = Path(__file__).parent / "app_icon.ico"
+        if icon.exists():
+            self.win.iconbitmap(bitmap=str(icon), default=str(icon))
+        self.win.minsize(680, 500)
         self.win.transient(app.root)
         self.win.grab_set()
 
@@ -2016,7 +2089,7 @@ class BatchCommandDialog:
 
         self.win.withdraw()
         self.setup_ui()
-        self.app.center_window(self.win)
+        self._center_on_parent()
         self.win.deiconify()
 
         self.win.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -2038,6 +2111,20 @@ class BatchCommandDialog:
             return
         self.win.destroy()
 
+    def _center_on_parent(self):
+        self.win.update_idletasks()
+        root = self.app.root
+        root.update_idletasks()
+        rw = root.winfo_width()
+        rh = root.winfo_height()
+        rx = root.winfo_rootx()
+        ry = root.winfo_rooty()
+        ww = self.win.winfo_width()
+        wh = self.win.winfo_height()
+        x = rx + (rw - ww) // 2
+        y = ry + (rh - wh) // 2
+        self.win.geometry(f"+{x}+{y}")
+
     def setup_ui(self):
         c = self._c()
         f = self.app.font_family
@@ -2046,6 +2133,9 @@ class BatchCommandDialog:
         # -- Header --
         header = ctk.CTkFrame(self.win, fg_color="transparent", corner_radius=0)
         header.pack(fill=tk.X, padx=24, pady=(20, 12))
+        if getattr(self.app, '_logo', None) is not None:
+            ctk.CTkLabel(header, image=self.app._logo, text="", width=26, height=26) \
+                .pack(side=tk.LEFT, padx=(0, 10))
         ctk.CTkLabel(header, text=self.t('batch_title'),
                      text_color=c['fg'],
                      font=(f, s + 3, 'bold')).pack(side=tk.LEFT)
@@ -2053,49 +2143,24 @@ class BatchCommandDialog:
                      text_color=c['fg2'],
                      font=(f, s - 1)).pack(side=tk.RIGHT)
 
-        # -- Command input --
-        cmd_frame = ctk.CTkFrame(self.win, fg_color=c['card'], corner_radius=8)
-        cmd_frame.pack(fill=tk.BOTH, expand=True, padx=24, pady=(0, 8))
+        # -- Main body: left-right split --
+        body = ctk.CTkFrame(self.win, fg_color="transparent", corner_radius=0)
+        body.pack(fill=tk.BOTH, expand=True, padx=24, pady=(0, 8))
+        body.grid_columnconfigure(0, weight=0, minsize=380)
+        body.grid_columnconfigure(1, weight=1)
+        body.grid_rowconfigure(0, weight=1)
 
-                # -- History combobox --
-        hist_row = ctk.CTkFrame(cmd_frame, fg_color="transparent", corner_radius=0)
-        hist_row.pack(fill=tk.X, padx=12, pady=(12, 0))
-        ctk.CTkLabel(hist_row, text=self.t('history_cmd') + ':',
+        # === LEFT: Command config ===
+        left_card = ctk.CTkFrame(body, fg_color=c['card'], corner_radius=8)
+        left_card.grid(row=0, column=0, sticky='nsew', padx=(0, 6))
+        left_card.grid_columnconfigure(0, weight=1)
+
+        # Presets
+        presets_row = ctk.CTkFrame(left_card, fg_color="transparent", corner_radius=0)
+        presets_row.grid(row=0, column=0, sticky='ew', padx=12, pady=(12, 8))
+        ctk.CTkLabel(presets_row, text=self.t('batch_presets'),
                      text_color=c['fg'],
                      font=(f, s)).pack(side=tk.LEFT, padx=(0, 6))
-        hist_display = []
-        for hc in self._cmd_history:
-            flat = hc.replace('\n', ' ').strip()
-            hist_display.append(flat[:70] + ('...' if len(flat) > 70 else ''))
-        if not hist_display:
-            hist_display = ['']
-        self.hist_var = tk.StringVar(value=hist_display[0])
-        self.combo_hist = ToggleComboBox(hist_row, variable=self.hist_var,
-                                          values=hist_display, state="readonly",
-                                          font=(f, s - 1), corner_radius=6,
-                                          command=self._on_history_select)
-        self.combo_hist.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        self.cmd_text = ctk.CTkTextbox(cmd_frame, wrap="word", height=100,
-                                       fg_color=c['input_bg'], text_color=c['fg'],
-                                       font=(f, s),
-                                       corner_radius=6, border_width=0)
-        self.cmd_text.pack(fill=tk.BOTH, expand=True, padx=12, pady=(12, 0))
-
-        # -- Hint --
-        ctk.CTkLabel(cmd_frame, text=self.t('batch_hint'),
-                     text_color=c['fg2'],
-                     font=(f, s - 2),
-                     anchor="w", justify="left",
-                     wraplength=620).pack(fill=tk.X, padx=12, pady=(4, 0))
-
-        # -- Presets --
-        presets_row = ctk.CTkFrame(cmd_frame, fg_color="transparent", corner_radius=0)
-        presets_row.pack(fill=tk.X, padx=12, pady=(8, 0))
-        ctk.CTkLabel(presets_row, text=self.t('batch_presets') + ':',
-                     text_color=c['fg'],
-                     font=(f, s)).pack(side=tk.LEFT, padx=(0, 6))
-
         self.preset_var = tk.StringVar()
         self._localized_presets = self._get_localized_presets()
         preset_names = [p['label'] for p in self._localized_presets]
@@ -2105,9 +2170,9 @@ class BatchCommandDialog:
                                            command=self._on_preset_select)
         self.combo_preset.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # -- Output suffix --
-        suffix_row = ctk.CTkFrame(cmd_frame, fg_color="transparent", corner_radius=0)
-        suffix_row.pack(fill=tk.X, padx=12, pady=(8, 12))
+        # Output suffix
+        suffix_row = ctk.CTkFrame(left_card, fg_color="transparent", corner_radius=0)
+        suffix_row.grid(row=1, column=0, sticky='ew', padx=12, pady=(0, 12))
         ctk.CTkLabel(suffix_row, text=self.t('batch_output_suffix'),
                      text_color=c['fg'],
                      font=(f, s)).pack(side=tk.LEFT, padx=(0, 8))
@@ -2119,20 +2184,37 @@ class BatchCommandDialog:
                                     width=140)
         suffix_entry.pack(side=tk.LEFT)
 
-        # -- Log area --
-        log_frame = ctk.CTkFrame(self.win, fg_color=c['card'], corner_radius=8)
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=24, pady=(0, 12))
+        # Command editor
+        self.cmd_text = ctk.CTkTextbox(left_card, wrap="word",
+                                       fg_color=c['input_bg'], text_color=c['fg'],
+                                       font=(f, s),
+                                       corner_radius=6, border_width=0)
+        self.cmd_text.grid(row=2, column=0, sticky='nsew', padx=12, pady=(0, 4))
+        left_card.grid_rowconfigure(2, weight=1)
 
-        self.log_text = ctk.CTkTextbox(log_frame, wrap="word", height=100,
+        # Hint
+        ctk.CTkLabel(left_card, text=self.t('batch_hint'),
+                     text_color=c['fg2'],
+                     font=(f, s - 1),
+                     anchor="w", justify="left",
+                     wraplength=356).grid(row=3, column=0, sticky='ew', padx=12, pady=(0, 12))
+
+        # === RIGHT: Log + Progress ===
+        right_card = ctk.CTkFrame(body, fg_color=c['card'], corner_radius=8)
+        right_card.grid(row=0, column=1, sticky='nsew', padx=(6, 0))
+        right_card.grid_columnconfigure(0, weight=1)
+        right_card.grid_rowconfigure(0, weight=1)
+
+        self.log_text = ctk.CTkTextbox(right_card, wrap="word",
                                        fg_color=c['input_bg'], text_color=c['fg'],
                                        font=(f, s - 1),
                                        corner_radius=6, border_width=0)
-        self.log_text.pack(fill=tk.BOTH, expand=True, padx=12, pady=(12, 8))
+        self.log_text.grid(row=0, column=0, sticky='nsew', padx=12, pady=(12, 8))
         self.log_text.configure(state="disabled")
 
-        # -- Progress --
-        self.prog_frame = ctk.CTkFrame(log_frame, fg_color="transparent", corner_radius=0)
-        self.prog_frame.pack(fill=tk.X, padx=12, pady=(0, 6))
+        # Progress
+        self.prog_frame = ctk.CTkFrame(right_card, fg_color="transparent", corner_radius=0)
+        self.prog_frame.grid(row=1, column=0, sticky='ew', padx=12, pady=(0, 6))
 
         self.prog_bar = ctk.CTkProgressBar(self.prog_frame, mode='determinate', height=8, corner_radius=4)
         self.prog_bar.pack(fill=tk.X)
@@ -2141,7 +2223,7 @@ class BatchCommandDialog:
         self.prog_label = ctk.CTkLabel(self.prog_frame,
                                        text='',
                                        text_color=c['fg2'],
-                                       font=(f, s - 2),
+                                       font=(f, s - 1),
                                        anchor="w")
         self.prog_label.pack(fill=tk.X, pady=(4, 6))
 
@@ -2177,7 +2259,7 @@ class BatchCommandDialog:
         self.win.update_idletasks()
 
     _PROG_KEYS = ('frame=', 'fps=', 'q=', 'size=', 'out_time', 'dup_frames=',
-                  'drop_frames=', 'speed=', 'progress=', 'bitrate=',
+                  'drop_frames=', 'progress=', 'bitrate=',
                   'total_size=', 'stream_', 'out_time_ms=', 'out_time_us=')
 
     @staticmethod
@@ -2204,52 +2286,6 @@ class BatchCommandDialog:
             return h * 3600 + mi * 60 + s + int(ms[:3].ljust(3, '0')) / 1000
         return None
 
-    def _load_history(self):
-        if self.history_file.exists():
-            try:
-                with open(self.history_file, 'r', encoding='utf-8') as fh:
-                    return json.load(fh)
-            except Exception:
-                pass
-        return []
-
-    def _save_history(self, cmd):
-        history = self._cmd_history
-        if cmd in history:
-            history.remove(cmd)
-        history.insert(0, cmd)
-        self._cmd_history = history[:10]
-        try:
-            with open(self.history_file, 'w', encoding='utf-8') as fh:
-                json.dump(self._cmd_history, fh, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
-        if hasattr(self, 'combo_hist'):
-            hist_display = []
-            for hc in self._cmd_history:
-                flat = hc.replace('\n', ' ').strip()
-                hist_display.append(flat[:70] + ('...' if len(flat) > 70 else ''))
-            if not hist_display:
-                hist_display = ['']
-            self.combo_hist.configure(values=hist_display)
-            self.hist_var.set(hist_display[0])
-
-
-
-    def _on_history_select(self, choice):
-        if not choice:
-            return
-        display_list = []
-        for hc in self._cmd_history:
-            flat = hc.replace('\n', ' ').strip()
-            display_list.append(flat[:70] + ('...' if len(flat) > 70 else ''))
-        if choice in display_list:
-            idx = display_list.index(choice)
-            if idx < len(self._cmd_history):
-                cmd = self._cmd_history[idx]
-                self.cmd_text.delete('1.0', tk.END)
-                self.cmd_text.insert('1.0', cmd)
-
     def _on_preset_select(self, choice):
         for p in self._localized_presets:
             if p['label'] == choice:
@@ -2272,8 +2308,6 @@ class BatchCommandDialog:
                                    self.t('batch_confirm', len(self.file_paths)),
                                    parent=self.win):
             return
-
-        self._save_history(cmd_template)
 
         self.running = True
         self._cancelled = False
@@ -2325,7 +2359,7 @@ class BatchCommandDialog:
                 cmd = self._strip_comments(cmd)
                 is_ffmpeg_cmd = cmd.strip().startswith('ffmpeg')
                 if is_ffmpeg_cmd:
-                    cmd = 'ffmpeg -progress pipe:2 -nostats' + cmd[6:]
+                    cmd = 'ffmpeg -hide_banner -loglevel warning -progress pipe:2 -nostats' + cmd[6:]
                 work_items.append({
                     'fp': fp, 'file_dur': file_dur, 'seq': idx + 1,
                     'cmd': cmd, 'out_path': out_path,
@@ -2531,6 +2565,7 @@ class BatchCommandDialog:
             self.win.after(150, _on_success)
 
 
+
 # Color helpers
 def _lighten(hex_color, factor=0.1):
     if not hex_color or not hex_color.startswith('#'):
@@ -2559,6 +2594,6 @@ if __name__ == "__main__":
     root = ctk.CTk()
     icon_path = Path(__file__).parent / "app_icon.ico"
     if icon_path.exists():
-        root.iconbitmap(default=str(icon_path))
+        root.iconbitmap(bitmap=str(icon_path), default=str(icon_path))
     app = VideoInfoApp(root)
     root.mainloop()
