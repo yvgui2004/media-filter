@@ -1,16 +1,8 @@
-# App runtime
-config.json
-window_geometry.json
-
-# Python
+.venv/
 __pycache__/
 *.pyc
-*.pyo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+_inspect/
