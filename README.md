@@ -7,8 +7,8 @@
 <h1 align="center">Media Filter v2</h1>
 
 <p align="center">
-A rewrite of the original <code>media-filter</code>: a desktop GUI that scans media folders (video + audio), reads metadata with <code>ffprobe</code>, and generates batch FFmpeg commands.<br>
-原版 <code>media-filter</code> 的重写版：桌面端媒体扫描工具，递归读取视频/音频的时长、码率等元数据，批量生成 FFmpeg 转码命令。<br>
+A desktop GUI that scans media folders (video + audio), reads metadata with <code>ffprobe</code>, and generates batch FFmpeg commands.<br>
+桌面端媒体扫描工具：递归读取视频/音频的时长、码率等元数据，批量生成 FFmpeg 转码命令。<br>
 <small>中文文档 → <a href="使用文档.md">使用文档.md</a> · <a href="使用文档.pdf">PDF</a></small></p>
 
 ---
