@@ -20,6 +20,10 @@ class Config:
     last_folder: str = ""
     presets: list[dict] = field(default_factory=list)    # user-customized presets
     cmd_history: list[str] = field(default_factory=list)  # recent custom commands
+    ai_model_path: str = ""              # empty -> auto-discover <project>/models/*.onnx
+    ai_sample_frames: int = 3            # frames sampled per video
+    ai_threads: int = 2                  # parallel inference workers
+    ai_conf: float = 0.25                # detection confidence threshold
 
     @classmethod
     def default_path(cls) -> Path:

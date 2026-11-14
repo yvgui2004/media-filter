@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+ai = ["numpy>=1.24", "onnxruntime>=1.17"]
 
 [project.scripts]
 mediafilter = "mediafilter.__main__:main"

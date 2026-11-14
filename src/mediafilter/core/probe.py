@@ -32,6 +32,18 @@ def find_ffprobe() -> str | None:
     return None
 
 
+def find_ffmpeg(ffprobe_path: str | None = None) -> str | None:
+    """Locate ffmpeg: PATH first, else next to a known ffprobe."""
+    on_path = shutil.which("ffmpeg")
+    if on_path:
+        return on_path
+    if ffprobe_path:
+        sibling = Path(ffprobe_path).with_name("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+        if sibling.is_file():
+            return str(sibling)
+    return None
+
+
 def probe_file(ffprobe_path: str | None, path: str | Path) -> MediaMetadata:
     """Extract duration / video bitrate / audio bitrate from one media file."""
     if not ffprobe_path:
