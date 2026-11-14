@@ -11,6 +11,9 @@ media folders (video + audio), reading metadata with <code>ffprobe</code>, and g
 FFmpeg commands.<br>
 <small>桌面端媒体文件扫描统计工具：递归扫描视频/音频，ffprobe 提取时长/码率，批量生成 FFmpeg 转码命令。</small></p>
 
+**文档：** 中文使用文档 → [使用文档.md](使用文档.md) · [PDF 版](使用文档.pdf)
+（PDF 由 `tools/build_doc_pdf.py` 生成，改完 md 后重跑即可）
+
 ---
 
 ## Why a rewrite?
@@ -63,7 +66,7 @@ Scanning itself never depends on the AI extra — it is enabled by pressing
 pip install -e ".[ai]"          # numpy + onnxruntime
 pip install ultralytics         # only needed to export the ONNX model once
 
-python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='onnx', imgsize=640)"
+python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='onnx', imgsz=640, opset=17, simplify=True)"
 mv yolov8n.onnx models/yolov8n_fp32.onnx
 python -m mediafilter
 ```
