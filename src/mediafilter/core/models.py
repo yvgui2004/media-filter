@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -27,6 +27,8 @@ class FileRecord:
     metadata: MediaMetadata | None = None
     error: str | None = None      # probe failure message, if any
     checked: bool = False         # user-selected for batch/export
+    tags: list[str] = field(default_factory=list)   # AI content tags (Chinese)
+    ai_error: str | None = None   # tagging failure message, if any
 
     @property
     def duration(self) -> float:

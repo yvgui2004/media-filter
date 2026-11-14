@@ -36,6 +36,8 @@ code into a pure, unit-tested `core/` and a thin Qt `ui/`.
 - Export TXT report
 - Batch FFmpeg presets (x265 CRF 23/26, NVENC HEVC CQ 23/26, NVENC H.264, NVENC AV1) — copy, save `.bat`, or run
 - Stream-copy / re-encode format conversion
+- **AI content tagging** (optional): YOLOv8n on ONNX Runtime labels videos with content tags
+  (person / screen / pets / vehicles …), filter the table by tag, cached per file
 - Dark / light / system theme, Chinese / English UI
 - Config + window geometry persisted under the user config directory
 
@@ -50,11 +52,48 @@ pip install -e .
 python -m mediafilter
 ```
 
+## AI content tagging (optional)
+
+The tagger samples frames with `ffmpeg` (piped, no temp files), runs a YOLOv8n
+ONNX model on ONNX Runtime, and writes Chinese content tags back to the table.
+Scanning itself never depends on the AI extra — it is enabled by pressing
+**AI 识别 / AI Tagging**, and results are cached by file identity + model version.
+
+```bash
+pip install -e ".[ai]"          # numpy + onnxruntime
+pip install ultralytics         # only needed to export the ONNX model once
+
+python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='onnx', imgsize=640)"
+mv yolov8n.onnx models/yolov8n_fp32.onnx
+python -m mediafilter
+```
+
+Settings live in `config.json` (`ai_model_path`, `ai_sample_frames`, `ai_threads`,
+`ai_conf`). An empty `ai_model_path` auto-discovers `<project>/models/*.onnx`.
+
+### Quantization benchmark
+
+`python tools/quantize.py --videos <paths...>` builds INT8 variants and writes
+`benchmark.md`. Measured on this machine (AMD64, ORT 1.31, 640×640, 4 threads):
+
+| model | size | median latency | class agreement vs FP32 |
+|---|---|---|---|
+| FP32 | 12.3 MB | ~10–17 ms | — |
+| INT8 dynamic (whole graph) | 3.3 MB | ~19–28 ms | 83% |
+| INT8 static QDQ (detection head kept FP32) | 6.0 MB | ~8–17 ms | 94% |
+
+Takeaways: quantizing the whole graph zeroes the classification branch, so the
+`/model.22/*` detection head must stay FP32; on an x86 CPU, ONNX Runtime's INT8
+kernels save size but not latency — real speedups need an NPU/OpenVINO/TensorRT
+backend. Details: [`benchmark.md`](benchmark.md).
+
 ## Structure
 
 ```
-media-filter-v2/
+media-filter-ai/
 ├── pyproject.toml
+├── models/                    # *.onnx (not committed; export script below)
+├── tools/quantize.py          # ONNX export/quantize + benchmark report
 ├── src/mediafilter/
 │   ├── __main__.py            # entry point
 │   ├── app.py                 # Qt bootstrap (config + translator + theme)
@@ -66,13 +105,16 @@ media-filter-v2/
 │   │   ├── scanner.py         # os.walk + extension filter
 │   │   ├── probe.py           # ffprobe wrapper + JSON parsing
 │   │   ├── pool.py            # ThreadPoolExecutor orchestration
-│   │   └── ffmpeg.py          # presets + command building
+│   │   ├── ffmpeg.py          # presets + command building
+│   │   ├── tagger.py          # frame sampling + YOLOv8 ONNX inference + tag mapping
+│   │   └── tag_cache.py       # tag cache keyed by path/mtime/size/model
 │   ├── i18n/                  # JSON locales + Translator
 │   └── ui/                    # Qt layer
 │       ├── main_window.py
 │       ├── table_model.py     # QAbstractTableModel
 │       ├── filter_proxy.py    # QSortFilterProxyModel
 │       ├── worker.py          # background scan thread
+│       ├── tag_worker.py      # background AI tagging (cache + thread pool)
 │       ├── stats_bar.py
 │       ├── theme.py           # Fusion + QSS palettes
 │       └── widgets/           # batch command / format convert dialogs
