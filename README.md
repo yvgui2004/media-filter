@@ -13,22 +13,6 @@ A rewrite of the original <code>media-filter</code>: a desktop GUI that scans me
 
 ---
 
-## Why a rewrite? / 为什么重写
-
-The original (Python + CustomTkinter + `ttk.Treeview`) worked, but had three structural problems:
-
-> 原版（Python + CustomTkinter + `ttk.Treeview`）能用，但有三个结构性问题：
-
-| # | Problem | 问题 |
-|---|---|---|
-| 1 | **A 2400-line god class** (`VideoInfoApp`) mixing scanning, ffprobe parsing, formatting, theming, i18n and layout | **2400 行的上帝类**（`VideoInfoApp`），把扫描、ffprobe 解析、格式化、主题、i18n、布局全揉在一起 |
-| 2 | **`ttk.Treeview` does not virtualize** — large libraries get slow because every row is a real widget | **`ttk.Treeview` 不做虚拟化**，每一行都是真实控件，文件一多就卡 |
-| 3 | **Logic and UI were inseparable**, so nothing was testable without opening the window | **逻辑和界面绑死**，不开窗口就什么都测不了 |
-
-This version keeps Python (the real work happens inside the external `ffprobe` / `ffmpeg` binaries) but replaces the UI with **Qt's model/view** and splits the code into a pure, unit-tested `core/` and a thin Qt `ui/`.
-
-> 这一版仍然用 Python（真正干活的是外部 `ffprobe` / `ffmpeg`），但界面换成 **Qt 的 model/view**，代码拆成纯逻辑、可单测的 `core/` 和薄薄一层 Qt `ui/`。
-
 ## Features / 功能
 
 | Feature | 功能 |
