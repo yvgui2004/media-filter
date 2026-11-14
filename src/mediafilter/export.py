@@ -34,7 +34,7 @@ def export_txt(records: list[FileRecord], dst: str | Path, tr: Translate) -> int
 
     header = (
         f"{tr('col.name'):<40} {tr('col.size'):>10} {tr('col.duration'):>10} "
-        f"{tr('col.bitrate'):>12}  {tr('col.format'):>6}"
+        f"{tr('col.bitrate'):>12}  {tr('col.format'):>6}  {tr('col.tags')}"
     )
     lines.append(header)
     lines.append("-" * len(header))
@@ -44,7 +44,10 @@ def export_txt(records: list[FileRecord], dst: str | Path, tr: Translate) -> int
         duration = format_duration(rec.duration)
         bitrate = format_bitrate(rec.bitrate) or tr("unknown")
         name = rec.name if len(rec.name) <= 40 else rec.name[:37] + "..."
-        lines.append(f"{name:<40} {size:>10} {duration:>10} {bitrate:>12}  {rec.extension:>6}")
+        tags = ", ".join(rec.tags) if rec.tags else "-"
+        lines.append(
+            f"{name:<40} {size:>10} {duration:>10} {bitrate:>12}  {rec.extension:>6}  {tags}"
+        )
 
     lines.append("")
     lines.append("-" * 72)

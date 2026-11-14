@@ -20,14 +20,17 @@ class FileRecordModel(QAbstractTableModel):
     COL_BITRATE = 4
     COL_FORMAT = 5
     COL_MTIME = 6
-    N_COLS = 7
+    COL_TAGS = 7
+    N_COLS = 8
 
     checkedChanged = Signal()
+    tagsChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._records: list[FileRecord] = []
-        self._headers = ["", "Name", "Size", "Duration", "Bitrate", "Format", "Modified"]
+        self._row_by_path: dict[str, int] = {}
+        self._headers = ["", "Name", "Size", "Duration", "Bitrate", "Format", "Modified", "Tags"]
 
     # -- rows / columns --------------------------------------------------
 
@@ -57,8 +60,28 @@ class FileRecordModel(QAbstractTableModel):
     def set_records(self, records: list[FileRecord]) -> None:
         self.beginResetModel()
         self._records = records
+        self._row_by_path = {str(r.path): i for i, r in enumerate(records)}
         self.endResetModel()
         self.checkedChanged.emit()
+
+    def update_tags(self, path: str, tags: list[str], error: str | None = None) -> bool:
+        """Apply AI tags to one row by path; returns False when the row is gone."""
+        row = self._row_by_path.get(str(path))
+        if row is None or row >= len(self._records):
+            return False
+        rec = self._records[row]
+        rec.tags = list(tags)
+        rec.ai_error = error
+        idx = self.index(row, self.COL_TAGS)
+        self.dataChanged.emit(idx, idx, [Qt.DisplayRole, Qt.ToolTipRole, SORT_ROLE])
+        self.tagsChanged.emit()
+        return True
+
+    def all_tags(self) -> list[str]:
+        seen: set[str] = set()
+        for rec in self._records:
+            seen.update(rec.tags)
+        return sorted(seen)
 
     # -- data ------------------------------------------------------------
 
@@ -86,6 +109,8 @@ class FileRecordModel(QAbstractTableModel):
                 return rec.extension.upper()
             if col == self.COL_MTIME:
                 return format_mtime(rec.mtime) or "—"
+            if col == self.COL_TAGS:
+                return ", ".join(rec.tags) if rec.tags else "—"
 
         if role == SORT_ROLE:
             if col == self.COL_SIZE:
@@ -100,6 +125,8 @@ class FileRecordModel(QAbstractTableModel):
                 return rec.extension
             if col == self.COL_MTIME:
                 return rec.mtime
+            if col == self.COL_TAGS:
+                return ",".join(rec.tags).lower()
 
         if role == Qt.TextAlignmentRole:
             if col in (self.COL_SIZE, self.COL_DURATION, self.COL_BITRATE, self.COL_MTIME):
@@ -112,6 +139,8 @@ class FileRecordModel(QAbstractTableModel):
                 return f"{tip}\n{rec.error}" if rec.error else tip
             if rec.error and col in (self.COL_DURATION, self.COL_BITRATE):
                 return rec.error
+            if col == self.COL_TAGS and rec.ai_error:
+                return rec.ai_error
 
         if role == Qt.ForegroundRole and rec.error:
             return QColor("#e0533f")  # readable red on both light and dark rows

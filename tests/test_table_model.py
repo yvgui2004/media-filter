@@ -44,3 +44,26 @@ def test_set_checked_bulk_updates_and_emits_once():
     model.set_checked([0, 1], True)
     assert all(r.checked for r in model.records())
     assert len(fired) == 1
+
+def test_update_tags_sets_row_and_collects_all_tags():
+    model = FileRecordModel()
+    a, b = _rec("a.mp4"), _rec("b.mp4")
+    model.set_records([a, b])
+
+    assert model.update_tags(str(a.path), ["人物", "屏幕"]) is True
+    assert a.tags == ["人物", "屏幕"]
+    assert model.all_tags() == ["人物", "屏幕"]
+    assert model.data(model.index(0, FileRecordModel.COL_TAGS), Qt.DisplayRole) == "人物, 屏幕"
+    assert model.data(model.index(1, FileRecordModel.COL_TAGS), Qt.DisplayRole) == "—"
+
+    # unknown path is ignored instead of raising
+    assert model.update_tags("nope.mp4", ["猫"]) is False
+
+
+def test_update_tags_records_error_for_tooltip():
+    model = FileRecordModel()
+    rec = _rec("a.mp4")
+    model.set_records([rec])
+    model.update_tags(str(rec.path), [], "no frames decoded")
+    assert rec.ai_error == "no frames decoded"
+    assert model.data(model.index(0, FileRecordModel.COL_TAGS), Qt.ToolTipRole) == "no frames decoded"

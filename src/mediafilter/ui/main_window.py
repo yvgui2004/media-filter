@@ -34,14 +34,16 @@ from PySide6.QtWidgets import (
 
 from ..config import Config
 from ..core.ffmpeg import Preset, default_presets
-from ..core.probe import find_ffprobe
-from ..core.scanner import DEFAULT_EXTENSIONS
+from ..core.probe import find_ffmpeg, find_ffprobe
+from ..core.scanner import DEFAULT_EXTENSIONS, VIDEO_EXTENSIONS
+from ..core.tagger import find_model
 from ..export import export_txt
 from ..i18n import Translator
 from .filter_proxy import FilterProxyModel
 from .stats_bar import StatsBar
 from .table_model import FileRecordModel
 from .theme import apply_theme
+from .tag_worker import TagWorker
 from .worker import ScanWorker
 from .widgets import BatchCommandDialog, FormatConvertDialog
 
@@ -55,16 +57,7 @@ _SORT_FIELDS = (
     ("col.bitrate", FileRecordModel.COL_BITRATE),
     ("col.format", FileRecordModel.COL_FORMAT),
     ("col.mtime", FileRecordModel.COL_MTIME),
-)
-
-
-_SORT_FIELDS = (
-    ("col.name", FileRecordModel.COL_NAME),
-    ("col.size", FileRecordModel.COL_SIZE),
-    ("col.duration", FileRecordModel.COL_DURATION),
-    ("col.bitrate", FileRecordModel.COL_BITRATE),
-    ("col.format", FileRecordModel.COL_FORMAT),
-    ("col.mtime", FileRecordModel.COL_MTIME),
+    ("col.tags", FileRecordModel.COL_TAGS),
 )
 
 
@@ -128,7 +121,9 @@ class MainWindow(QMainWindow):
         self._tr = tr.tr                # callable tr(key, **kwargs)
         self._config = config
         self._worker: ScanWorker | None = None
+        self._tag_worker: TagWorker | None = None
         self._ffprobe_path = find_ffprobe()
+        self._ffmpeg_path = find_ffmpeg(self._ffprobe_path)
         self._filter_formats: list[str] = []   # extensions currently selectable
         self._sort_ascending = True
         self._syncing_sort = False
@@ -168,6 +163,7 @@ class MainWindow(QMainWindow):
 
         self._open_btn = self._add_tool("toolbar.open_folder", self.open_folder)
         self._refresh_btn = self._add_tool("toolbar.refresh", self.refresh_current_folder)
+        self._ai_btn = self._add_tool("toolbar.ai", self.on_ai_clicked)
         self._toolbar.addSeparator()
         self._select_all_btn = self._add_tool("toolbar.select_all", self.select_all)
         self._deselect_all_btn = self._add_tool("toolbar.deselect_all", self.deselect_all)
@@ -200,6 +196,12 @@ class MainWindow(QMainWindow):
         fr.addWidget(self._filter_label)
         self._filter_combo = QComboBox()
         fr.addWidget(self._filter_combo, 1)
+
+        self._tag_label = QLabel()
+        fr.addWidget(self._tag_label)
+        self._tag_combo = QComboBox()
+        self._tag_combo.setMinimumWidth(110)
+        fr.addWidget(self._tag_combo, 1)
 
         self._sort_label = QLabel()
         fr.addWidget(self._sort_label)
@@ -248,6 +250,8 @@ class MainWindow(QMainWindow):
         header.resizeSection(FileRecordModel.COL_SIZE, 90)
         header.resizeSection(FileRecordModel.COL_DURATION, 90)
         header.resizeSection(FileRecordModel.COL_BITRATE, 100)
+        header.setSectionResizeMode(FileRecordModel.COL_TAGS, QHeaderView.Interactive)
+        header.resizeSection(FileRecordModel.COL_TAGS, 180)
         header.setStretchLastSection(False)
         root.addWidget(self._view, 1)
 
@@ -283,6 +287,7 @@ class MainWindow(QMainWindow):
     def _connect_signals(self) -> None:
         self._search.textChanged.connect(self._proxy.set_search)
         self._filter_combo.currentIndexChanged.connect(self._on_filter_changed)
+        self._tag_combo.currentIndexChanged.connect(self._on_tag_filter_changed)
         self._sort_combo.currentIndexChanged.connect(self._on_sort_changed)
         self._view.horizontalHeader().sortIndicatorChanged.connect(self._on_header_sort_changed)
         self._model.checkedChanged.connect(self._refresh_stats)
@@ -312,8 +317,11 @@ class MainWindow(QMainWindow):
         for key, widget in text_map.items():
             widget.setText(tr(key))
 
+        running = self._tag_worker is not None and self._tag_worker.isRunning()
+        self._ai_btn.setText(tr("toolbar.ai_stop") if running else tr("toolbar.ai"))
         self._search.setPlaceholderText(tr("toolbar.search"))
         self._filter_label.setText(tr("toolbar.filter"))
+        self._tag_label.setText(tr("toolbar.tag_filter"))
         self._sort_label.setText(tr("toolbar.sort"))
         self._threads_label.setText(tr("toolbar.threads"))
         self._stop_btn.setText(tr("status.cancelled"))
@@ -324,10 +332,12 @@ class MainWindow(QMainWindow):
         self._model.set_headers([
             "", tr("col.name"), tr("col.size"),
             tr("col.duration"), tr("col.bitrate"), tr("col.format"), tr("col.mtime"),
+            tr("col.tags"),
         ])
         self._stats.set_tr(self._tr)
         self._rebuild_filter_combo()
         self._rebuild_sort_combo()
+        self._rebuild_tag_combo()
         self._refresh_stats()
 
     def cycle_theme(self) -> None:
@@ -451,6 +461,7 @@ class MainWindow(QMainWindow):
         self._model.set_records([])
         self._filter_formats = []
         self._rebuild_filter_combo()
+        self._rebuild_tag_combo()
         self._progress.setVisible(True)
         self._progress.setValue(0)
         self._stop_btn.setEnabled(True)
@@ -483,6 +494,7 @@ class MainWindow(QMainWindow):
         self._finish_scan()
         self._model.set_records(records)
         self._populate_filter_formats(records)
+        self._rebuild_tag_combo()
         self._apply_sort()
         errors = sum(1 for r in records if r.error)
         self.statusBar().showMessage(
@@ -494,12 +506,108 @@ class MainWindow(QMainWindow):
         if records:
             self._model.set_records(records)
             self._populate_filter_formats(records)
+            self._rebuild_tag_combo()
             self._apply_sort()
         self.statusBar().showMessage(self._tr("status.cancelled"))
 
     def _on_scan_failed(self, message: str) -> None:
         self._finish_scan()
         QMessageBox.critical(self, self._tr("app.title"), message)
+
+    # -- AI tagging ------------------------------------------------------
+
+    def on_ai_clicked(self) -> None:
+        if self._tag_worker is not None and self._tag_worker.isRunning():
+            self._tag_worker.cancel()
+            self._ai_btn.setEnabled(False)
+            return
+        self.start_tagging()
+
+    def start_tagging(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            QMessageBox.information(self, self._tr("app.title"), self._tr("msg.ai_running"))
+            return
+        if self._tag_worker is not None and self._tag_worker.isRunning():
+            return
+
+        targets = self._target_records()
+        if not targets:
+            targets = self._model.records()
+        targets = [
+            r for r in targets
+            if r.extension in VIDEO_EXTENSIONS or r.video_bitrate > 0
+        ]
+        if not targets:
+            QMessageBox.information(self, self._tr("app.title"), self._tr("msg.ai_no_targets"))
+            return
+
+        model = find_model(self._config.ai_model_path)
+        if model is None:
+            QMessageBox.warning(self, self._tr("app.title"), self._tr("msg.ai_model_missing"))
+            return
+        if not self._ffmpeg_path:
+            QMessageBox.warning(self, self._tr("app.title"), self._tr("msg.ffprobe_missing"))
+            return
+
+        self._progress.setVisible(True)
+        self._progress.setMaximum(max(1, len(targets)))
+        self._progress.setValue(0)
+        self._ai_btn.setText(self._tr("toolbar.ai_stop"))
+
+        self._tag_worker = TagWorker(
+            targets, model, self._ffmpeg_path,
+            sample_frames=self._config.ai_sample_frames,
+            threads=self._config.ai_threads,
+            conf=self._config.ai_conf,
+            parent=self,
+        )
+        self._tag_worker.tagged.connect(self._on_tagged)
+        self._tag_worker.progress.connect(self._on_tag_progress)
+        self._tag_worker.finished_ok.connect(self._on_tag_done)
+        self._tag_worker.failed.connect(self._on_tag_failed)
+        self._tag_worker.start()
+
+    def _on_tagged(self, path: str, tags: list, error: str) -> None:
+        self._model.update_tags(path, tags, error or None)
+
+    def _on_tag_progress(self, done: int, total: int) -> None:
+        self._progress.setMaximum(max(1, total))
+        self._progress.setValue(done)
+        self.statusBar().showMessage(self._tr("status.ai_scanning", done=done, total=total))
+
+    def _on_tag_done(self, total: int, tagged_ok: int, failed: int) -> None:
+        self._tag_worker = None
+        self._progress.setVisible(False)
+        self._ai_btn.setEnabled(True)
+        self._ai_btn.setText(self._tr("toolbar.ai"))
+        self._rebuild_tag_combo()
+        self.statusBar().showMessage(self._tr("status.ai_done", n=tagged_ok, failed=failed))
+
+    def _on_tag_failed(self, message: str) -> None:
+        self._tag_worker = None
+        self._progress.setVisible(False)
+        self._ai_btn.setEnabled(True)
+        self._ai_btn.setText(self._tr("toolbar.ai"))
+        QMessageBox.critical(self, self._tr("app.title"), self._tr("msg.ai_failed", err=message))
+
+    def _rebuild_tag_combo(self) -> None:
+        current = self._tag_combo.currentText() if self._tag_combo.count() else ""
+        self._tag_combo.blockSignals(True)
+        self._tag_combo.clear()
+        self._tag_combo.addItem(self._tr("toolbar.tag_all"))
+        self._tag_combo.addItems(self._model.all_tags())
+        if current:
+            idx = self._tag_combo.findText(current)
+            self._tag_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self._tag_combo.blockSignals(False)
+        self._on_tag_filter_changed()
+
+    def _on_tag_filter_changed(self) -> None:
+        if self._tag_combo.currentIndex() <= 0:
+            self._proxy.set_tags(set())
+            return
+        text = self._tag_combo.currentText()
+        self._proxy.set_tags({text} if text else set())
 
     # -- selection / checks ---------------------------------------------
 
@@ -519,11 +627,22 @@ class MainWindow(QMainWindow):
         src = self._proxy.mapToSource(index)
         self._model.toggle_check(src.row())
 
+    def _visible_source_rows(self) -> list[int]:
+        """Source rows currently passing the filter (i.e. what the user sees)."""
+        return [
+            self._proxy.mapToSource(self._proxy.index(row, 0)).row()
+            for row in range(self._proxy.rowCount())
+        ]
+
     def select_all(self) -> None:
+        # "Select all" ticks the checkboxes too: checking is what drives export
+        # and batch actions, so requiring a second click was surprising.
         self._view.selectAll()
+        self._model.set_checked(self._visible_source_rows(), True)
 
     def deselect_all(self) -> None:
         self._view.clearSelection()
+        self._model.set_checked(self._visible_source_rows(), False)
 
     def check_selected(self) -> None:
         self._model.set_checked(self._selected_source_rows(), True)
