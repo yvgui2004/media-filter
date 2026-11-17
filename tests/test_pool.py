@@ -30,9 +30,15 @@ def test_scan_and_probe_reports_progress(tmp_path):
 
     ticks = []
     done = threading.Event()
+
+    def on_progress(d, t):
+        ticks.append((d, t))
+        if d == t:
+            done.set()
+
     records, cancelled = scan_and_probe(
         files, ffprobe_path=None, max_workers=2,
-        progress=lambda d, t: (ticks.append((d, t)), done.set() if d == t else None),
+        progress=on_progress,
     )
     assert len(records) == 3
     assert not cancelled

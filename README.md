@@ -1,128 +1,76 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/GUI-PySide6%20%2F%20Qt6-41cd52?style=flat&logo=qt&logoColor=white" alt="PySide6">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <img alt="PySide6" src="https://img.shields.io/badge/UI-PySide6%20%2F%20Qt6-41cd52?logo=qt&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
-<h1 align="center">Media Filter v2</h1>
+<h1 align="center">mediafilter</h1>
 
 <p align="center">
-A desktop GUI that scans media folders (video + audio), reads metadata with <code>ffprobe</code>, and generates batch FFmpeg commands.<br>
-桌面端媒体扫描工具：递归读取视频/音频的时长、码率等元数据，批量生成 FFmpeg 转码命令。<br>
-<small>中文文档 → <a href="使用文档.md">使用文档.md</a> · <a href="使用文档.pdf">PDF</a></small></p>
+  <b>EN</b> — A desktop media browser: scan a folder, see every video and audio file with its real metadata, tag it with AI, filter it, and turn a selection into batch FFmpeg commands.<br>
+  <b>中文</b> — 桌面端媒体浏览器：扫描一个文件夹，在一张表里看清每个视频、音频的大小、时长和码率，再打标签、筛选，把勾选的文件变成批量 FFmpeg 命令。
+</p>
 
 ---
 
-## Features / 功能
+## What it does / 它能做什么
 
-| Feature | 功能 |
-|---|---|
-| Recursive folder scan; `ffprobe` metadata (size / duration / video + audio bitrate) | 递归扫描文件夹；`ffprobe` 读取大小 / 时长 / 音视频码率 |
-| Multi-threaded probing with progress + cancel | 多线程探测，带进度和取消 |
-| Sortable and filterable (format / name / tag) virtualized table | 可排序、可筛选（格式 / 文件名 / 标签）的虚拟化表格 |
-| Checkbox selection with live totals (count / duration / size) | 勾选文件并实时统计数量 / 总时长 / 总大小 |
-| Export TXT report | 导出 TXT 报告 |
-| Batch FFmpeg presets (x265 CRF 23/26, NVENC HEVC CQ 23/26, NVENC H.264, NVENC AV1) — copy, save `.bat`, or run | FFmpeg 批量预设（x265 CRF 23/26、NVENC HEVC CQ 23/26、NVENC H.264、NVENC AV1），可复制、存为 `.bat` 或直接执行 |
-| Stream-copy / re-encode format conversion | 流拷贝 / 重编码格式转换 |
-| **AI content tagging** (optional): YOLOv8n on ONNX Runtime labels videos (person / screen / pets / vehicles …), filter by tag, cached per file | **AI 内容识别**（可选）：ONNX Runtime 跑 YOLOv8n，给视频打内容标签（人物 / 屏幕 / 宠物 / 车辆……），支持按标签筛选，按文件缓存 |
-| Dark / light / system theme, Chinese / English UI | 深色 / 浅色 / 跟随系统主题，中英文界面 |
-| Config + window geometry persisted | 配置和窗口位置持久化 |
+**English**
 
-## Quick start / 快速开始
+- Recursively scans a folder and reads real metadata with `ffprobe`: size, duration, video and audio bitrate, format, modification time.
+- Shows everything in a sortable, filterable table with checkboxes and live totals (file count, total duration, total size).
+- **Optional AI tagging** — label videos by what is actually in them: people, screens, food, pets, vehicles, scenery, shot size, technical traits. Run it fully local with YOLOv8n, local-first with a cloud fallback (hybrid), or fully in the cloud. Results are cached per file.
+- **Batch FFmpeg** — pick an x265 / NVENC preset, then copy the commands, save them as a `.bat`, or run them in place.
+- Format conversion (stream copy or re-encode), TXT report export, light / dark / system themes, Chinese and English UI.
 
-`ffmpeg` must be on PATH — it provides `ffprobe`.
+**中文**
 
-> `ffmpeg` 需要在 PATH 里，`ffprobe` 由它提供。
+- 递归扫描文件夹，用 `ffprobe` 读取真实元数据：大小、时长、音视频码率、格式、修改时间。
+- 一张可排序、可筛选的表格，带勾选和实时统计（文件数、总时长、总大小）。
+- **可选 AI 内容识别** —— 按画面内容打标签：人物、屏幕、食物、宠物、车辆、场景、景别、技术特征。支持纯本地（YOLOv8n）、本地先筛的混合模式、全云端三种跑法，结果按文件缓存。
+- **批量 FFmpeg** —— 选 x265 / NVENC 预设，复制命令、存成 `.bat`，或直接执行。
+- 格式转换（流拷贝或重编码）、导出 TXT 清单、浅色 / 深色 / 跟随系统主题、中英文界面。
 
-```bash
-python -m venv .venv
-.venv/Scripts/activate        # Windows (Git Bash: source .venv/Scripts/activate) / Windows 激活虚拟环境
-pip install -e .
-python -m mediafilter
-```
+## How to use / 如何使用
 
-## AI content tagging (optional) / AI 内容识别（可选）
+**English**
 
-The tagger samples frames with `ffmpeg` (piped, no temp files), runs a YOLOv8n ONNX model on ONNX Runtime, and writes Chinese content tags back to the table. Scanning never depends on the AI extra: tagging starts from **AI 识别 / AI Tagging**, and results are cached by file identity + model version.
+1. Install Python 3.10+ and put `ffmpeg` on `PATH` — it provides `ffprobe`.
+2. Install and launch:
 
-> 抽帧通过 `ffmpeg` 管道完成，不落临时文件；YOLOv8n ONNX 模型在 ONNX Runtime 上推理，结果以中文标签写回表格。扫描本身不依赖 AI 依赖包，点「AI 识别」才开始，结果按「文件 + 模型版本」缓存。
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\activate        # Windows
+   pip install -e .
+   python -m mediafilter
+   ```
 
-```bash
-pip install -e ".[ai]"          # numpy + onnxruntime
-pip install ultralytics         # only needed to export the ONNX model once / 只在导出模型时需要
+3. **Scan** — click 「打开文件夹」 and choose a folder. The scan runs in the background and can be cancelled. Filter by format, tag or file name; click any column header to sort.
+4. **Tag with AI (optional)** — click **AI 识别**. Local mode stays entirely on your machine; hybrid and cloud modes need an API endpoint and key in Settings. The caret next to the button switches mode. Nothing is uploaded before the confirmation card.
+5. **Batch commands** — tick the files, open 「批量命令」, choose a preset, then copy, save or run. 「格式转换」 uses the same flow with a container / stream-copy choice.
+6. **Settings** — the gear opens default recognition mode, API key (stored only on this machine and masked everywhere), model selection, the 26 built-in tags, custom labels, and sampling / upload options.
 
-python -c "from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='onnx', imgsz=640, opset=17, simplify=True)"
-mv yolov8n.onnx models/yolov8n_fp32.onnx
-python -m mediafilter
-```
+Full guide: [使用文档.md](使用文档.md) · [使用文档.pdf](使用文档.pdf)
 
-Settings live in `config.json` (`ai_model_path`, `ai_sample_frames`, `ai_threads`, `ai_conf`); an empty `ai_model_path` auto-discovers `<project>/models/*.onnx`.
+**中文**
 
-> 配置在 `config.json`：`ai_model_path`、`ai_sample_frames`、`ai_threads`、`ai_conf`；`ai_model_path` 留空时自动查找 `<project>/models/*.onnx`。
+1. 安装 Python 3.10+，把 `ffmpeg`（自带 `ffprobe`）放进 `PATH`。
+2. 安装并启动：命令同上。
+3. **扫描** —— 点「打开文件夹」选目录，后台扫描可随时取消；按格式、标签、文件名筛选，点列头排序。
+4. **AI 识别（可选）** —— 点 **AI 识别**。本地模式完全在本机推理；混合 / 全云端需要在设置里填接口地址和 Key。按钮右侧箭头切换模式，上传前一定会弹确认卡。
+5. **批量命令** —— 勾选文件，打开「批量命令」，选预设后复制命令、存为 `.bat` 或直接执行。「格式转换」是同一流程里的容器与流拷贝选择。
+6. **设置** —— 齿轮里可以改默认识别方式、API Key（只存本机、界面与日志全部打码）、模型、26 个内置标签、自定义标签，以及抽帧和上传选项。
 
-### Quantization benchmark / 量化实测
+## Tech at a glance / 技术一览
 
-`python tools/quantize.py --videos <paths...>` builds INT8 variants and writes `benchmark.md`. Measured on this machine (AMD64, ORT 1.31, 640×640, 4 threads):
+**English**
 
-> `python tools/quantize.py --videos <paths...>` 生成 INT8 模型变体并写出 `benchmark.md`。本机实测（AMD64、ORT 1.31、640×640、4 线程）：
+Python 3.10+ with a PySide6 / Qt6 desktop shell (Fusion plus token-driven QSS themes and a model/view table). Scanning calls `ffprobe` from a cancellable thread pool; FFmpeg commands are built as plain data in `core/`, kept apart from the UI. AI tagging is an optional extra: frames are piped from `ffmpeg` into ONNX Runtime with a YOLOv8n model, and cloud modes work with any OpenAI-compatible `/v1/models` endpoint. Config is JSON; the API key is encrypted with Windows DPAPI. 70 pytest cases and a strict pyright pass cover the core logic.
 
-| Model / 模型 | Size / 体积 | Median latency / 中位延迟 | Class agreement / 类别一致率 |
-|---|---|---|---|
-| FP32 | 12.3 MB | ~10–17 ms | — |
-| INT8 dynamic (whole graph) / 动态（全图） | 3.3 MB | ~19–28 ms | 83% |
-| INT8 static QDQ (detection head kept FP32) / 静态 QDQ（检测头 FP32） | 6.0 MB | ~8–17 ms | 94% |
+**中文**
 
-Takeaways: quantizing the whole graph zeroes the classification branch, so the `/model.22/*` detection head must stay FP32; on an x86 CPU, ONNX Runtime's INT8 kernels save size but not latency — real speedups need an NPU / OpenVINO / TensorRT backend. Details: [`benchmark.md`](benchmark.md).
-
-> 结论：整图量化会把分类分支输出清零，所以检测头 `/model.22/*` 必须保留 FP32；在 x86 CPU 上，ONNX Runtime 的 INT8 内核只省体积、不提速，真要提速得靠 NPU / OpenVINO / TensorRT。详见 [`benchmark.md`](benchmark.md)。
-
-## Structure / 目录结构
-
-```
-media-filter-ai/
-├── pyproject.toml
-├── models/                    # *.onnx, not committed / 模型，不入库
-├── tools/quantize.py          # export + quantize + benchmark / 导出量化评测
-├── tools/build_doc_pdf.py     # usage doc -> PDF / 使用文档转 PDF
-├── src/mediafilter/
-│   ├── __main__.py            # entry point / 启动入口
-│   ├── app.py                 # Qt bootstrap (config + i18n + theme) / Qt 启动
-│   ├── config.py              # dataclass config -> platformdirs JSON / 配置读写
-│   ├── export.py              # TXT report / TXT 报告
-│   ├── core/                  # pure logic, no Qt / 纯逻辑，无 Qt
-│   │   ├── models.py          # MediaMetadata / FileRecord
-│   │   ├── formats.py         # size / duration / bitrate formatting / 格式化
-│   │   ├── scanner.py         # os.walk + extension filter / 目录遍历
-│   │   ├── probe.py           # ffprobe wrapper + JSON parsing / ffprobe 封装
-│   │   ├── pool.py            # ThreadPoolExecutor orchestration / 扫描线程池
-│   │   ├── ffmpeg.py          # presets + command building / 预设与命令生成
-│   │   ├── tagger.py          # frame sampling + YOLOv8 inference + tag mapping / 抽帧与推理
-│   │   └── tag_cache.py       # cache keyed by path/mtime/size/model / 标签缓存
-│   ├── i18n/                  # JSON locales + Translator / 多语言
-│   └── ui/                    # Qt layer / Qt 界面层
-│       ├── main_window.py
-│       ├── table_model.py     # QAbstractTableModel
-│       ├── filter_proxy.py    # QSortFilterProxyModel
-│       ├── worker.py          # background scan thread / 扫描线程
-│       ├── tag_worker.py      # background AI tagging / AI 识别线程
-│       ├── stats_bar.py
-│       ├── theme.py           # Fusion + QSS palettes / 主题
-│       └── widgets/           # batch command / format convert dialogs / 对话框
-└── tests/                     # pytest (core + model) / 单元测试
-```
-
-## Tests / 测试
-
-```bash
-.venv/Scripts/python.exe -m pytest -q
-```
-
-38 cases cover formatting, ffprobe parsing, scanning, command presets, pool cancellation, frame sampling, tag voting, YOLO output decoding, tag cache and the table/proxy models.
-
-> 38 个用例，覆盖格式化、ffprobe 解析、扫描、命令预设、线程池取消、抽帧时间点、标签投票、YOLO 输出解码、标签缓存以及表格 / 筛选模型。
+Python 3.10+，界面为 PySide6 / Qt6（Fusion + token 驱动的 QSS 主题、model/view 表格）。扫描在可取消的线程池里调用 `ffprobe`；FFmpeg 命令在 `core/` 里以纯数据构建，和界面解耦。AI 识别是可选依赖：`ffmpeg` 管道抽帧，ONNX Runtime 跑 YOLOv8n；云端模式兼容任意 OpenAI 格式的 `/v1/models` 接口。配置是 JSON，API Key 用 Windows DPAPI 加密。70 个 pytest 用例与严格 pyright 检查覆盖核心逻辑。
 
 ## License / 许可
 
 MIT — see [LICENSE](LICENSE).
-
-> MIT，见 [LICENSE](LICENSE)。

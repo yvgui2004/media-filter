@@ -1,11 +1,10 @@
 .venv/
 __pycache__/
 *.pyc
-*.egg-info/
-build/
-dist/
 .pytest_cache/
-_inspect/
+*.bundle
+.interface-design/
 models/*.onnx
 models/*.pt
-benchmark.json
+# local editor/type-checker config (absolute paths)
+pyrightconfig.json

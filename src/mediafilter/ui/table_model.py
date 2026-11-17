@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
+from PySide6.QtCore import (
+    QAbstractTableModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QColor
 
 from ..core.formats import format_bitrate, format_duration, format_mtime, format_size
@@ -10,6 +16,8 @@ from ..core.models import FileRecord
 
 # Role used by the sort proxy so numeric/name sorting matches DisplayRole text.
 SORT_ROLE = Qt.UserRole + 1
+# Role returning the underlying FileRecord for custom delegates.
+RECORD_ROLE = Qt.UserRole + 2
 
 
 class FileRecordModel(QAbstractTableModel):
@@ -34,10 +42,10 @@ class FileRecordModel(QAbstractTableModel):
 
     # -- rows / columns --------------------------------------------------
 
-    def rowCount(self, parent=QModelIndex()):
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._records)
 
-    def columnCount(self, parent=QModelIndex()):
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
         return 0 if parent.isValid() else self.N_COLS
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
@@ -90,6 +98,9 @@ class FileRecordModel(QAbstractTableModel):
             return None
         rec = self._records[index.row()]
         col = index.column()
+
+        if role == RECORD_ROLE:
+            return rec
 
         if col == self.COL_CHECK:
             if role == Qt.CheckStateRole:

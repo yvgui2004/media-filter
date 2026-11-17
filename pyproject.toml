@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mediafilter"
 version = "0.1.0"
-description = "Cross-platform desktop GUI for scanning media folders and generating FFmpeg batch commands."
+description = "Desktop media browser: scan, tag with local or cloud AI, and generate batch FFmpeg commands."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

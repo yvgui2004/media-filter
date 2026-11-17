@@ -16,7 +16,7 @@ def test_format_duration():
 def test_format_size():
     assert format_size(0) == "0 B"
     assert format_size(1024) == "1.00 KB"
-    assert format_size(2.5 * 1024 ** 3) == "2.50 GB"
+    assert format_size(int(2.5 * 1024 ** 3)) == "2.50 GB"
 
 
 def test_format_bitrate():

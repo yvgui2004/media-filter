@@ -5,6 +5,9 @@ runtime import is lazy so the app still starts (and scans) when the AI extra
 is not installed.
 """
 
+# numpy is imported defensively below; type checkers treat the fallback as None.
+# pyright: reportOptionalMemberAccess=false, reportInvalidTypeForm=false
+
 from __future__ import annotations
 
 import math
@@ -196,7 +199,7 @@ def aggregate_tags(votes: dict[str, int], frames: int) -> list[str]:
     threshold = max(1, math.ceil(frames / 2)) if frames else 1
     kept = [name for name, n in votes.items() if n >= threshold]
     if not kept:
-        kept = [max(votes, key=votes.get)]
+        kept = [max(votes, key=lambda name: votes[name])]
     return sorted(kept, key=lambda n: (-votes[n], n))
 
 

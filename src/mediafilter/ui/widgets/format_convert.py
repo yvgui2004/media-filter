@@ -4,16 +4,23 @@ from __future__ import annotations
 
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
-    QComboBox,
-    QDialog,
     QHBoxLayout,
-    QLabel,
-    QMessageBox,
-    QPushButton,
     QTextEdit,
     QVBoxLayout,
 )
 
+from ..dialog_base import (
+    AppDialog,
+    add_footer,
+    count_label,
+    dialog_button,
+    lede_label,
+    message_box,
+    mono_font,
+    note_label,
+    section_label,
+)
+from ..select_field import SelectField
 from ...core.ffmpeg import build_command, build_output_path
 from ...core.models import FileRecord
 
@@ -42,52 +49,83 @@ _MODES = (
 )
 
 
-class FormatConvertDialog(QDialog):
-    def __init__(self, records: list[FileRecord], tr, parent=None):
-        super().__init__(parent)
+class FormatConvertDialog(AppDialog):
+    def __init__(
+        self,
+        records: list[FileRecord],
+        tr,
+        parent=None,
+        tokens: dict[str, str] | None = None,
+    ):
+        super().__init__(tokens, parent)
         self._records = records
         self._tr = tr
 
         self.setWindowTitle(tr("dialog.convert_title"))
-        self.setMinimumWidth(560)
+        self.resize(720, 560)
+        self.setMinimumSize(620, 480)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(10)
+        layout.setContentsMargins(24, 22, 24, 20)
+        layout.setSpacing(14)
+
+        layout.addWidget(lede_label(tr("dialog.convert_lede", n=len(records))))
 
         # target + mode
-        row = QHBoxLayout()
-        row.addWidget(QLabel(tr("dialog.convert_to")))
-        self._target = QComboBox()
-        self._target.addItems(_TARGETS)
-        row.addWidget(self._target, 1)
-        self._mode = QComboBox()
-        for mode in _MODES:
-            self._mode.addItem(self._mode_label(mode))
-        row.addWidget(self._mode, 1)
-        layout.addLayout(row)
+        option_row = QHBoxLayout()
+        option_row.setSpacing(16)
+        target_box = QVBoxLayout()
+        target_box.setSpacing(8)
+        target_box.addWidget(section_label(tr("dialog.convert_to")))
+        self._target = SelectField()
+        self._target.set_tokens(self._tokens)
+        self._target.set_accessible_label(tr("dialog.convert_to"))
+        self._target.set_popup_width(160)
+        target_box.addWidget(self._target)
+        option_row.addLayout(target_box, 2)
+
+        mode_box = QVBoxLayout()
+        mode_box.setSpacing(8)
+        mode_box.addWidget(section_label(tr("dialog.mode")))
+        self._mode = SelectField()
+        self._mode.set_tokens(self._tokens)
+        self._mode.set_accessible_label(tr("dialog.mode"))
+        self._mode.set_popup_width(380)
+        mode_box.addWidget(self._mode)
+        option_row.addLayout(mode_box, 5)
+        layout.addLayout(option_row)
 
         # functional annotation for the selected mode
-        self._mode_note = QLabel()
-        self._mode_note.setObjectName("presetNote")
-        self._mode_note.setWordWrap(True)
+        self._mode_note = note_label()
         layout.addWidget(self._mode_note)
 
+        preview_head = QHBoxLayout()
+        preview_head.setSpacing(8)
+        preview_head.addWidget(section_label(tr("dialog.section_preview")))
+        preview_head.addStretch(1)
+        self._count = count_label()
+        preview_head.addWidget(self._count)
+        layout.addLayout(preview_head)
+
         self._preview = QTextEdit()
+        self._preview.setObjectName("PreviewBox")
         self._preview.setReadOnly(True)
+        self._preview.setFont(mono_font(12))
+        self._preview.setAccessibleName(tr("dialog.section_preview"))
         layout.addWidget(self._preview, 1)
 
-        btn_row = QHBoxLayout()
-        self._copy_btn = QPushButton(tr("dialog.copy"))
-        self._close_btn = QPushButton(tr("dialog.close"))
-        btn_row.addWidget(self._copy_btn)
-        btn_row.addWidget(self._close_btn)
-        layout.addLayout(btn_row)
+        self._copy_btn = dialog_button(tr("dialog.copy"), "primary")
+        self._close_btn = dialog_button(tr("dialog.close"))
+        add_footer(layout, [self._close_btn, self._copy_btn])
 
         self._target.currentIndexChanged.connect(self._refresh)
         self._mode.currentIndexChanged.connect(self._refresh)
         self._copy_btn.clicked.connect(self._copy)
         self._close_btn.clicked.connect(self.reject)
 
+        self._target.addItems([target.upper() for target in _TARGETS])
+        for mode in _MODES:
+            self._mode.addItem(self._tr(mode[1]))
         self._refresh()
 
     def _current_mode(self):
@@ -95,9 +133,6 @@ class FormatConvertDialog(QDialog):
 
     def _template(self) -> str:
         return self._current_mode()[0]
-
-    def _mode_label(self, mode) -> str:
-        return f"{self._tr(mode[1])} — {self._tr(mode[2])}"
 
     def _mode_description(self) -> str:
         return self._tr(self._current_mode()[2])
@@ -111,13 +146,15 @@ class FormatConvertDialog(QDialog):
         ]
 
     def _refresh(self):
-        self._preview.setPlainText("\n\n".join(self._commands()))
+        commands = self._commands()
+        self._preview.setPlainText("\n\n".join(commands))
         self._mode_note.setText(self._mode_description())
+        self._count.setText(self._tr("dialog.command_count", n=len(commands)))
 
     def _copy(self):
         commands = self._commands()
         if not commands:
-            QMessageBox.information(self, self._tr("app.title"),
+            message_box(self, "info", self._tr("app.title"),
                                     self._tr("msg.nothing_selected"))
             return
         QGuiApplication.clipboard().setText("\n\n".join(commands))
