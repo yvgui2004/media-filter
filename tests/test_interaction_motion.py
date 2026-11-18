@@ -178,7 +178,7 @@ def test_second_click_on_mode_caret_retracts(qt_app):
     assert switch._popover is None
 
 
-def test_settings_dialog_matches_welcome_card_proportion(qt_app):
+def test_settings_dialog_matches_main_window_proportion(qt_app):
     assert qt_app is not None
 
     def tr(key, **_kwargs):
@@ -187,13 +187,13 @@ def test_settings_dialog_matches_welcome_card_proportion(qt_app):
     settings = SettingsDialog(Config(), tr, None, tokens=LIGHT)
     welcome = SettingsDialog(Config(), tr, None, tokens=LIGHT, variant="first_run")
     try:
-        assert settings.width() == 700
-        assert 620 <= settings.height() <= 751
+        assert settings.width() == 900
+        assert 520 <= settings.height() <= 570
+        if settings.height() == 570:
+            # 1200:760 main window, at 75% scale.
+            assert abs(settings.width() / settings.height() - 1200 / 760) < 0.01
         assert welcome.width() == 760
-        # Same 760:815 proportion, scaled down and capped by the screen.
-        expected = welcome.width() * 815 / 760
-        if welcome.height() >= expected:
-            assert abs(settings.width() * 815 / 760 - settings.height()) <= 1
+        assert 620 <= welcome.height() <= 815
     finally:
         settings.close()
         welcome.close()

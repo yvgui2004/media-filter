@@ -492,6 +492,8 @@ class SettingsDialog(AppDialog):
             tr("first_run.window_title") if self._first_run else tr("settings.title")
         )
         self.setMinimumSize(680, 620)
+        if not self._first_run:
+            self.setMinimumSize(700, 520)
         self._size_dialog()
 
         outer = QVBoxLayout(self)
@@ -533,13 +535,19 @@ class SettingsDialog(AppDialog):
     def _size_dialog(self) -> None:
         screen = QGuiApplication.primaryScreen()
         available = screen.availableGeometry().height() if screen else 900
-        # Both variants keep the welcome card's 760:815 proportion. The
-        # everyday settings page is scaled down to 700×751 so it reads as a
-        # focused card instead of a full-height sheet.
-        width = 760 if self._first_run else 700
-        height = int(round(width * 815 / 760))
-        ceiling = int(available * (0.9 if self._first_run else 0.88))
-        self.resize(width, max(620, min(height, ceiling)))
+        if self._first_run:
+            width = 760
+            height = int(round(width * 815 / 760))
+            ceiling = int(available * 0.9)
+            floor = 620
+        else:
+            # Same 1200:760 proportion as the main window, at 75% scale:
+            # 900×570 reads as the workspace shrunk into a dialog.
+            width = 900
+            height = int(round(width * 760 / 1200))
+            ceiling = int(available * 0.88)
+            floor = 520
+        self.resize(width, max(floor, min(height, ceiling)))
 
     def _rule(self) -> QFrame:
         rule = QFrame()
