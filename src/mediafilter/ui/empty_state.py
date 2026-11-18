@@ -114,6 +114,7 @@ class EmptyState(QWidget):
         layout.addStretch(1)
 
         self._faded = False
+        self._primary_icon = "folder"
         self._effect = QGraphicsOpacityEffect(self)
         self._effect.setOpacity(1.0)
         self.setGraphicsEffect(self._effect)
@@ -121,13 +122,18 @@ class EmptyState(QWidget):
     def set_tokens(self, tokens: dict[str, str]) -> None:
         self._tokens = tokens
         self._film.set_tokens(tokens)
-        self._primary.setIcon(line_icon("folder", tokens["on_accent"], 15))
+        self._primary.setIcon(line_icon(self._primary_icon, tokens["on_accent"], 15))
 
     def set_content(self, title: str, body: str, primary: str,
-                    link: str = "", link_tip: str = "") -> None:
+                    link: str = "", link_tip: str = "",
+                    primary_icon: str = "folder") -> None:
         self._title.setText(title)
         self._body.setText(body)
         self._primary.setText(primary)
+        self._primary_icon = primary_icon
+        self._primary.setIcon(
+            line_icon(primary_icon, self._tokens["on_accent"], 15)
+        )
         self._link.setVisible(bool(link))
         if link:
             metrics = self._link.fontMetrics()

@@ -54,11 +54,13 @@ from .cloud_tag_worker import CloudTagWorker
 from .empty_state import EmptyState
 from .filter_proxy import FilterProxyModel
 from .icons import brand_pixmap, line_icon
+from .motion import REVEAL, animate_height, set_faded_visible
 from .select_field import SelectField
 from .table_model import FileRecordModel
 from .tag_worker import TagWorker
 from .theme import apply_theme, palette_for, resolve_mode
 from .titlebar import FolderChip, TitleBar
+from .toast import Toast
 from .widgets import (
     BatchCommandDialog, FormatConvertDialog, MyTagsDialog, SettingsDialog,
 )
@@ -378,6 +380,8 @@ class MainWindow(QMainWindow):
         root.addWidget(self._status_bar)
 
         self.setCentralWidget(central)
+        self._toast = Toast(central)
+        self._toast.set_tokens(self._palette)
 
         find = QShortcut(QKeySequence.StandardKey.Find, self)
         find.activated.connect(self._focus_search)
@@ -552,7 +556,7 @@ class MainWindow(QMainWindow):
         self._scan_line.setTextVisible(False)
         self._scan_line.setRange(0, 1)
         self._scan_line.setValue(0)
-        self._scan_line.setVisible(False)
+        self._hide_progress()
         col.addWidget(self._scan_line)
 
         self._guide = QWidget()
@@ -579,6 +583,7 @@ class MainWindow(QMainWindow):
         self._guide_close.clicked.connect(self._dismiss_guide)
         guide_row.addWidget(self._guide_close)
         self._guide.setVisible(False)
+        self._guide_open = False
         col.addWidget(self._guide)
 
         self._model = FileRecordModel(self)
@@ -629,9 +634,15 @@ class MainWindow(QMainWindow):
         self._empty.primaryClicked.connect(self.open_folder)
         self._empty.linkClicked.connect(self._open_last_folder)
 
+        # A separate page for "filters hid everything": different copy and a
+        # one-click reset instead of "open a folder".
+        self._empty_filter = EmptyState()
+        self._empty_filter.primaryClicked.connect(self._clear_filters)
+
         self._stack = QStackedWidget()
         self._stack.addWidget(self._view)
         self._stack.addWidget(self._empty)
+        self._stack.addWidget(self._empty_filter)
         col.addWidget(self._stack, 1)
 
     def _build_statusbar(self) -> None:
@@ -707,6 +718,7 @@ class MainWindow(QMainWindow):
     def _connect_signals(self) -> None:
         self._search.textChanged.connect(self._proxy.set_search)
         self._search.textChanged.connect(self._refresh_stats)
+        self._search.textChanged.connect(self._sync_empty_state)
         self._filter_combo.currentIndexChanged.connect(self._on_filter_changed)
         self._tag_combo.currentIndexChanged.connect(self._on_tag_filter_changed)
         self._sort_combo.currentIndexChanged.connect(self._on_sort_changed)
@@ -780,6 +792,7 @@ class MainWindow(QMainWindow):
         self._sync_minimum_width()
         self._refresh_stats()
         self._update_empty_texts()
+        self._update_filtered_texts()
         if not self._scanning and (self._tag_worker is None or not self._tag_worker.isRunning()):
             self._set_status(tr("status.ready"))
         self._sync_empty_state()
@@ -822,6 +835,8 @@ class MainWindow(QMainWindow):
         self._folder_chip.set_tokens(p)
         self._delegate.set_tokens(p)
         self._empty.set_tokens(p)
+        self._empty_filter.set_tokens(p)
+        self._toast.set_tokens(p)
         for field in (
             self._filter_combo,
             self._tag_combo,
@@ -871,6 +886,33 @@ class MainWindow(QMainWindow):
     def _set_status(self, text: str) -> None:
         self._status_label.setText(text or "")
         self._status_label.setToolTip(text or "")
+
+    # -- toast -----------------------------------------------------------
+
+    def _show_toast(self, text: str) -> None:
+        toast = getattr(self, "_toast", None)
+        if toast is None or not text:
+            return
+        toast.show_message(text)
+        self._place_toast()
+
+    def _place_toast(self) -> None:
+        toast = getattr(self, "_toast", None)
+        if toast is None:
+            return
+        parent = toast.parentWidget()
+        if parent is None:
+            return
+        toast.adjustSize()
+        top = self._status_bar.mapTo(parent, QPoint(0, 0)).y()
+        x = max(8, (parent.width() - toast.width()) // 2)
+        y = max(8, top - toast.height() - 12)
+        toast.move(x, y)
+        toast.raise_()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._place_toast()
 
     def _focus_search(self) -> None:
         self._search.setFocus(Qt.ShortcutFocusReason)
@@ -924,6 +966,7 @@ class MainWindow(QMainWindow):
         ext = self._filter_for_index(self._filter_combo.currentIndex())
         self._proxy.set_formats({ext} if ext else set())
         self._refresh_stats()
+        self._sync_empty_state()
 
     def _populate_filter_formats(self, records) -> None:
         exts = sorted({r.extension for r in records if r.extension})
@@ -996,11 +1039,46 @@ class MainWindow(QMainWindow):
         self._empty.set_content(title, body, tr("toolbar.open_folder"), link, tip)
 
     def _sync_empty_state(self) -> None:
+        filtered = (
+            self._model.rowCount() > 0
+            and self._proxy.rowCount() == 0
+            and not self._scanning
+        )
         if self._model.rowCount() == 0 and not self._scanning:
             self._update_empty_texts()
             self._stack.setCurrentWidget(self._empty)
+        elif filtered:
+            self._update_filtered_texts()
+            self._stack.setCurrentWidget(self._empty_filter)
         else:
             self._stack.setCurrentWidget(self._view)
+
+    def _update_filtered_texts(self) -> None:
+        tr = self._tr
+        self._empty_filter.set_content(
+            tr("empty.filtered_title"),
+            tr("empty.filtered_body"),
+            tr("empty.clear_filters"),
+            primary_icon="refresh",
+        )
+
+    def _clear_filters(self) -> None:
+        """Reset search and both dropdowns, then show every row again."""
+        tr = self._tr
+        widgets = (self._search, self._filter_combo, self._tag_combo)
+        for widget in widgets:
+            widget.blockSignals(True)
+        self._search.clear()
+        self._filter_combo.setCurrentIndex(0)
+        self._tag_combo.setCurrentIndex(0)
+        for widget in widgets:
+            widget.blockSignals(False)
+        self._proxy.set_search("")
+        self._proxy.set_formats(set())
+        self._proxy.set_tags(set())
+        self._refresh_stats()
+        self._sync_empty_state()
+        self._show_toast(tr("toast.filters_cleared"))
 
     def _open_last_folder(self) -> None:
         folder = self._config.last_folder
@@ -1061,7 +1139,7 @@ class MainWindow(QMainWindow):
         self._update_folder_chip()
 
         self._scan_line.setRange(0, 0)
-        self._scan_line.setVisible(True)
+        self._show_progress()
         self._stop_btn.setVisible(True)
         self._stop_btn.setEnabled(True)
         self._set_status(self._tr("status.preparing"))
@@ -1092,9 +1170,15 @@ class MainWindow(QMainWindow):
         self._scan_line.setValue(done)
         self._set_status(self._tr("status.scanning", done=done, total=total))
 
+    def _show_progress(self) -> None:
+        set_faded_visible(self._scan_line, True, REVEAL)
+
+    def _hide_progress(self) -> None:
+        set_faded_visible(self._scan_line, False, REVEAL)
+
     def _finish_scan(self) -> None:
         self._scanning = False
-        self._scan_line.setVisible(False)
+        self._hide_progress()
         self._stop_btn.setVisible(False)
         self._stop_btn.setEnabled(False)
         self._worker = None
@@ -1147,12 +1231,17 @@ class MainWindow(QMainWindow):
     def _on_mode_changed(self, mode: str) -> None:
         if mode not in ("local", "hybrid", "cloud"):
             mode = "local"
+        previous = self._mode
         self._mode = mode
         # One source of truth: the pill and the settings page edit the same
         # value, and switching here also becomes the next launch default.
         self._config.recognition_mode = mode
         self._config.save()
         self._update_ai_button()
+        if mode != previous:
+            self._show_toast(self._tr(
+                "toast.mode_switched", mode=self._tr(f"mode.{mode}.name")
+            ))
 
     def _apply_saved_mode(self) -> None:
         """Show the mode saved in the settings page on the main window pill."""
@@ -1271,7 +1360,7 @@ class MainWindow(QMainWindow):
         )
         self._scan_line.setRange(0, max(1, len(targets)))
         self._scan_line.setValue(0)
-        self._scan_line.setVisible(True)
+        self._show_progress()
         self._set_status(self._tr("status.cloud_starting"))
         self._start_tag_worker(worker)
 
@@ -1307,7 +1396,7 @@ class MainWindow(QMainWindow):
 
         self._scan_line.setRange(0, max(1, len(targets)))
         self._scan_line.setValue(0)
-        self._scan_line.setVisible(True)
+        self._show_progress()
         self._set_status(self._tr("status.ai_starting"))
         self._update_ai_button()
 
@@ -1330,14 +1419,14 @@ class MainWindow(QMainWindow):
 
     def _on_tag_done(self, total: int, tagged_ok: int, failed: int) -> None:
         self._tag_worker = None
-        self._scan_line.setVisible(False)
+        self._hide_progress()
         self._rebuild_tag_combo()
         self._set_status(self._tr("status.ai_done", n=tagged_ok, failed=failed))
         self._update_ai_button()
 
     def _on_tag_failed(self, message: str) -> None:
         self._tag_worker = None
-        self._scan_line.setVisible(False)
+        self._hide_progress()
         self._update_ai_button()
         message_box(self, "critical", self._tr("app.title"), self._tr("msg.ai_failed", err=message))
 
@@ -1360,6 +1449,7 @@ class MainWindow(QMainWindow):
             text = self._tag_combo.currentText()
             self._proxy.set_tags({text} if text else set())
         self._refresh_stats()
+        self._sync_empty_state()
 
     # -- selection / checks ---------------------------------------------
 
@@ -1458,8 +1548,7 @@ class MainWindow(QMainWindow):
         if not path:
             return
         export_txt(records, path, self._tr)
-        message_box(self, "info", self._tr("app.title"),
-                                self._tr("msg.export_done", path=path))
+        self._show_toast(self._tr("toast.exported", name=Path(path).name))
 
     # -- settings, my tags, first run ------------------------------------
 
@@ -1493,19 +1582,39 @@ class MainWindow(QMainWindow):
             and self._config.first_run_prompted
             and not self._config.guide_dismissed
         )
-        self._guide.setVisible(visible)
+        self._set_guide_visible(visible)
+
+    def _set_guide_visible(self, visible: bool) -> None:
+        """Reveal/collapse the 40 px bar instead of popping it in."""
         if visible:
+            if self._guide_open:
+                return
+            self._guide_open = True
+            start = self._guide.height() if self._guide.isVisible() else 0
+            self._guide.setFixedHeight(start)
+            self._guide.setVisible(True)
+            animate_height(self._guide, start, 40, REVEAL)
             self._pulse_settings_button()
+            return
+        if not self._guide_open or not self._guide.isVisible():
+            return
+        self._guide_open = False
+
+        def collapsed() -> None:
+            self._guide.setVisible(False)
+            self._guide.setFixedHeight(40)
+
+        animate_height(self._guide, self._guide.height(), 0, REVEAL, collapsed)
 
     def _dismiss_guide(self) -> None:
         self._config.guide_dismissed = True
         self._config.save()
-        self._guide.setVisible(False)
+        self._set_guide_visible(False)
 
     def _hide_guide(self) -> None:
         if not self._guide.isVisible():
             return
-        self._guide.setVisible(False)
+        self._set_guide_visible(False)
         if not self._config.guide_dismissed:
             self._config.guide_dismissed = True
             self._config.save()
@@ -1529,10 +1638,16 @@ class MainWindow(QMainWindow):
             self._config, self._tr, self, tokens=self._palette,
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
+            previous = self._mode
             self._config.save()
             self._apply_saved_mode()
             self._ai.set_custom_count(len(self._config.custom_labels))
-            self._set_status(self._tr("status.settings_saved"))
+            if self._mode != previous:
+                self._show_toast(self._tr(
+                    "toast.mode_switched", mode=self._tr(f"mode.{self._mode}.name")
+                ))
+            else:
+                self._show_toast(self._tr("status.settings_saved"))
 
     def open_my_tags(self) -> None:
         dialog = MyTagsDialog(
@@ -1543,7 +1658,7 @@ class MainWindow(QMainWindow):
             self._config.custom_labels = dialog.labels()
             self._config.save()
             self._ai.set_custom_count(len(self._config.custom_labels))
-            self._set_status(self._tr("status.tags_saved"))
+            self._show_toast(self._tr("status.tags_saved"))
 
     def open_batch(self) -> None:
         records = self._target_records()

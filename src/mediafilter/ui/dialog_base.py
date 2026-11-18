@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from .motion import FAST, fade_in_window
 from .tokens import LIGHT, parse_color
 
 _DWMWA_BORDER_COLOR = 34
@@ -90,6 +91,9 @@ class AppDialog(QDialog):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         tint_native_titlebar(self, self._tokens)
+        # A 120 ms fade instead of a hard pop; the native caption is included
+        # because the whole top-level window is blended.
+        fade_in_window(self, FAST)
 
 
 def section_label(text: str) -> QLabel:

@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from PySide6.QtCore import QPoint, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import (
+    QEasingCurve, QPoint, QPropertyAnimation, QRectF, QSize, Qt, Signal,
+)
 from PySide6.QtGui import QFont, QGuiApplication, QPainter
 from PySide6.QtWidgets import (
-    QAbstractButton, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
-    QVBoxLayout, QWidget,
+    QAbstractButton, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel,
+    QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from ..dialog_base import AppDialog, dialog_button, note_label
 from ..icons import line_icon
+from ..motion import FAST, animations_enabled, rise_popup
 from ..tokens import LIGHT, parse_color
 from .flow_layout import FlowLayout
 from .mode_widgets import MODES, RadioDot, mode_text
@@ -76,16 +79,26 @@ class _AiMain(QPushButton):
 class _AiCaret(QPushButton):
     def __init__(self, tokens: dict[str, str], parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._tokens = tokens
+        self._open = False
         self.setObjectName("AiCaret")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedSize(25, 34)
         self.apply_tokens(tokens)
 
+    def set_open(self, open_: bool) -> None:
+        if self._open == open_:
+            return
+        self._open = open_
+        self.apply_tokens(self._tokens)
+
     def apply_tokens(self, tokens: dict[str, str]) -> None:
+        self._tokens = tokens
         # Heavier than the default line weight: a 1.7 stroke dissolves into
         # the accent fill at fractional DPI and reads as a pale blue glyph.
+        name = "chevron-up" if self._open else "chevron-down"
         self.setIcon(
-            line_icon("chevron-down", tokens["on_accent"], 13, weight=2.6)
+            line_icon(name, tokens["on_accent"], 13, weight=2.6)
         )
         self.setIconSize(QSize(13, 13))
 
@@ -105,6 +118,7 @@ class AiModeSwitch(QWidget):
         self._mode = "local"
         self._busy = False
         self._popover: ModePopover | None = None
+        self._pulse: QPropertyAnimation | None = None
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -155,8 +169,34 @@ class AiModeSwitch(QWidget):
         self.main.chip.setVisible(not busy)
         self.caret.setEnabled(not busy)
         self.separator.setVisible(not busy)
+        self._set_pulsing(busy)
         if busy and self._popover is not None:
             self._popover.close()
+
+    def _set_pulsing(self, on: bool) -> None:
+        """Breathe the busy icon so "working" reads without a spinner."""
+        if self._pulse is not None:
+            self._pulse.stop()
+            self._pulse = None
+        existing = self.main.icon_label.graphicsEffect()
+        if not on or not animations_enabled():
+            if isinstance(existing, QGraphicsOpacityEffect):
+                existing.setOpacity(1.0)
+            return
+        effect = existing
+        if not isinstance(effect, QGraphicsOpacityEffect):
+            effect = QGraphicsOpacityEffect(self.main.icon_label)
+            self.main.icon_label.setGraphicsEffect(effect)
+        effect.setOpacity(1.0)
+        anim = QPropertyAnimation(effect, b"opacity", self.main.icon_label)
+        anim.setDuration(1200)
+        anim.setStartValue(1.0)
+        anim.setKeyValueAt(0.5, 0.55)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.InOutSine)
+        anim.setLoopCount(-1)
+        anim.start()
+        self._pulse = anim
 
     def set_tokens(self, tokens: dict[str, str]) -> None:
         self._tokens = tokens
@@ -190,6 +230,7 @@ class AiModeSwitch(QWidget):
         pop.modePicked.connect(self._on_mode_picked)
         pop.tagsRequested.connect(self._on_tags)
         pop.settingsRequested.connect(self._on_settings)
+        pop.closed.connect(self._on_popover_closed)
         pop.destroyed.connect(lambda _obj=None: self._forget_popover(pop))
         self._popover = pop
         pop.set_mode(self._mode)
@@ -203,8 +244,12 @@ class AiModeSwitch(QWidget):
             if y + pop.height() > avail.bottom() - 8:
                 y = self.mapToGlobal(QPoint(0, 0)).y() - pop.height() - 6
             pos = QPoint(x, y)
-        pop.move(pos)
+        self.caret.set_open(True)
         pop.show()
+        rise_popup(pop, pos)
+
+    def _on_popover_closed(self) -> None:
+        self.caret.set_open(False)
 
     def _forget_popover(self, pop) -> None:
         if self._popover is pop:
@@ -373,6 +418,7 @@ class ModePopover(QFrame):
     modePicked = Signal(str)
     tagsRequested = Signal()
     settingsRequested = Signal()
+    closed = Signal()
 
     def __init__(self, tr, tokens: dict[str, str], tags_count: int = 0,
                  parent: QWidget | None = None) -> None:
@@ -432,6 +478,12 @@ class ModePopover(QFrame):
     def _set_tags_count(self, count: int) -> None:
         self._tags_count = count
         self.tags_link.count.setText(self._tr("mode.tags_count", n=count, max=10))
+
+    def hideEvent(self, event) -> None:
+        # Fires for a picked row, a click outside and Esc alike: the caret
+        # only points up while the menu is actually on screen.
+        super().hideEvent(event)
+        self.closed.emit()
 
     def set_tags_count(self, count: int) -> None:
         self._set_tags_count(count)

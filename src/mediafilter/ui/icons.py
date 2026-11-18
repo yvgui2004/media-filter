@@ -83,6 +83,9 @@ def _draw(p: QPainter, name: str, color: QColor, weight: float = 1.7) -> None:
     elif name == "chevron-down":
         p.drawPolyline([QPointF(6, 9), QPointF(12, 15), QPointF(18, 9)])
 
+    elif name == "chevron-up":
+        p.drawPolyline([QPointF(6, 15), QPointF(12, 9), QPointF(18, 15)])
+
     elif name == "chevron-right":
         p.drawPolyline([QPointF(9, 6), QPointF(15, 12), QPointF(9, 18)])
 
