@@ -5,12 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QEvent, QPointF, Qt
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication
 
 from mediafilter.config import Config
 from mediafilter.core.models import FileRecord
 from mediafilter.i18n import Translator
 from mediafilter.ui.main_window import MainWindow
+from mediafilter.ui.select_field import SelectField
+from mediafilter.ui.tokens import LIGHT
+from mediafilter.ui.widgets.mode_switch import AiModeSwitch
+from mediafilter.ui.widgets.settings_dialog import SettingsDialog
 
 LOCALES = Path(__file__).parents[1] / "src" / "mediafilter" / "i18n" / "locales"
 
@@ -141,3 +147,53 @@ def test_switching_mode_shows_a_toast(qt_app, tmp_path):
         assert win._toast._label.text() == expected
     finally:
         win.close()
+
+
+def _press(widget) -> None:
+    pos = QPointF(5, 5)
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonPress, pos, pos,
+        Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    widget.mousePressEvent(event)
+
+
+def test_second_click_on_select_field_arrow_retracts(qt_app):
+    assert qt_app is not None
+    field = SelectField("格式")
+    field.addItems(["全部", "MP4"])
+    field._popup_closed()          # what Qt does when the popup closes
+    assert field._suppress_open
+    _press(field)                  # replayed press from the closing click
+    assert field._popup is None
+    assert field._suppress_open is False
+
+
+def test_second_click_on_mode_caret_retracts(qt_app):
+    assert qt_app is not None
+    switch = AiModeSwitch(lambda key, **_: key, LIGHT)
+    switch._on_popover_closed()    # popup closed by the first caret click
+    switch._toggle_popover()       # replayed click must not reopen
+    assert switch._popover is None
+
+
+def test_settings_dialog_matches_welcome_card_proportion(qt_app):
+    assert qt_app is not None
+
+    def tr(key, **_kwargs):
+        return key
+
+    settings = SettingsDialog(Config(), tr, None, tokens=LIGHT)
+    welcome = SettingsDialog(Config(), tr, None, tokens=LIGHT, variant="first_run")
+    try:
+        assert settings.width() == 700
+        assert 620 <= settings.height() <= 751
+        assert welcome.width() == 760
+        # Same 760:815 proportion, scaled down and capped by the screen.
+        expected = welcome.width() * 815 / 760
+        if welcome.height() >= expected:
+            assert abs(settings.width() * 815 / 760 - settings.height()) <= 1
+    finally:
+        settings.close()
+        welcome.close()

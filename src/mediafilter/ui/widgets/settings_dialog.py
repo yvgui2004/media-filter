@@ -533,11 +533,13 @@ class SettingsDialog(AppDialog):
     def _size_dialog(self) -> None:
         screen = QGuiApplication.primaryScreen()
         available = screen.availableGeometry().height() if screen else 900
-        if self._first_run:
-            height = min(815, int(available * 0.9))
-        else:
-            height = min(900, int(available * 0.88))
-        self.resize(760, max(620, height))
+        # Both variants keep the welcome card's 760:815 proportion. The
+        # everyday settings page is scaled down to 700×751 so it reads as a
+        # focused card instead of a full-height sheet.
+        width = 760 if self._first_run else 700
+        height = int(round(width * 815 / 760))
+        ceiling = int(available * (0.9 if self._first_run else 0.88))
+        self.resize(width, max(620, min(height, ceiling)))
 
     def _rule(self) -> QFrame:
         rule = QFrame()

@@ -12,7 +12,7 @@ from dataclasses import replace
 
 from PySide6.QtCore import (
     QEvent, QModelIndex, QPersistentModelIndex, QPoint, QPointF, QRect,
-    QRectF, QSize, Qt, Signal,
+    QRectF, QSize, Qt, QTimer, Signal,
 )
 from PySide6.QtGui import (
     QColor, QFont, QFontMetrics, QGuiApplication, QMouseEvent,
@@ -814,6 +814,11 @@ class ModelPicker(QWidget):
         self._open = False
         self._opened_by_mouse = False
         self._popup: _ModelPopup | None = None
+        self._suppress_open = False
+        self._suppress_timer = QTimer(self)
+        self._suppress_timer.setSingleShot(True)
+        self._suppress_timer.setInterval(220)
+        self._suppress_timer.timeout.connect(self._clear_suppress)
         self.setFixedHeight(FIELD_HEIGHT)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1066,12 +1071,25 @@ class ModelPicker(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.isEnabled():
+            if self._suppress_open:
+                # Replayed press from the click that closed the list; it must
+                # only retract, not immediately reopen.
+                self._suppress_open = False
+                event.accept()
+                return
+            if self._open and self._popup is not None:
+                self._popup.close()
+                event.accept()
+                return
             self.setFocus(Qt.FocusReason.MouseFocusReason)
             self._opened_by_mouse = True
             self.open_popup()
             event.accept()
             return
         super().mousePressEvent(event)
+
+    def _clear_suppress(self) -> None:
+        self._suppress_open = False
 
     def keyPressEvent(self, event) -> None:
         if event.key() in (
@@ -1118,6 +1136,8 @@ class ModelPicker(QWidget):
         self.selected.emit(model)
 
     def _popup_closed(self) -> None:
+        self._suppress_open = True
+        self._suppress_timer.start()
         popup = self._popup
         self._popup = None
         self._open = False

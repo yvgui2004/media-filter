@@ -5,7 +5,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from PySide6.QtCore import (
-    QEasingCurve, QPoint, QPropertyAnimation, QRectF, QSize, Qt, Signal,
+    QEasingCurve, QPoint, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal,
 )
 from PySide6.QtGui import QFont, QGuiApplication, QPainter
 from PySide6.QtWidgets import (
@@ -119,6 +119,11 @@ class AiModeSwitch(QWidget):
         self._busy = False
         self._popover: ModePopover | None = None
         self._pulse: QPropertyAnimation | None = None
+        self._suppress_open = False
+        self._suppress_timer = QTimer(self)
+        self._suppress_timer.setSingleShot(True)
+        self._suppress_timer.setInterval(220)
+        self._suppress_timer.timeout.connect(self._clear_suppress)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -222,6 +227,11 @@ class AiModeSwitch(QWidget):
     # -- popover ---------------------------------------------------------
 
     def _toggle_popover(self) -> None:
+        if self._suppress_open:
+            # Qt replays the closing click into the caret; treat it as part
+            # of the same gesture so a second click only retracts.
+            self._suppress_open = False
+            return
         if self._popover is not None and self._popover.isVisible():
             self._popover.close()
             return
@@ -249,7 +259,12 @@ class AiModeSwitch(QWidget):
         rise_popup(pop, pos)
 
     def _on_popover_closed(self) -> None:
+        self._suppress_open = True
+        self._suppress_timer.start()
         self.caret.set_open(False)
+
+    def _clear_suppress(self) -> None:
+        self._suppress_open = False
 
     def _forget_popover(self, pop) -> None:
         if self._popover is pop:
@@ -427,6 +442,9 @@ class ModePopover(QFrame):
         self._tokens = tokens
         self.setObjectName("ModePopover")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # Clicking the caret again must only close the menu; without this the
+        # press is replayed into the caret and the popover pops straight back.
+        self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
         self.setFixedWidth(330)
         self.setStyleSheet(
             "QFrame#ModePopover { background: %s; border: 1px solid %s; "
