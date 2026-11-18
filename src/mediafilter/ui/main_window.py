@@ -39,6 +39,7 @@ from ..core.cloud_tagger import CloudTagConfig
 from ..core.ffmpeg import Preset, default_presets
 from ..core.formats import format_duration, format_size
 from ..core.probe import find_ffmpeg, find_ffprobe
+from ..core.sampling import sample_counts
 from ..core.scanner import DEFAULT_EXTENSIONS, VIDEO_EXTENSIONS
 from ..core.tagger import find_model
 from ..core.vocabulary import ALL_TAG_IDS, DEFAULT_ENABLED, tag_label
@@ -84,7 +85,7 @@ _COLUMN_WIDTHS = {
     FileRecordModel.COL_CHECK: 40,
     FileRecordModel.COL_SIZE: 96,
     FileRecordModel.COL_DURATION: 92,
-    FileRecordModel.COL_BITRATE: 148,
+    FileRecordModel.COL_BITRATE: 96,
     FileRecordModel.COL_FORMAT: 86,
     FileRecordModel.COL_MTIME: 132,
     FileRecordModel.COL_TAGS: 200,
@@ -1276,16 +1277,26 @@ class MainWindow(QMainWindow):
             for tag_id in (self._config.tag_palette or list(DEFAULT_ENABLED))
             if tag_id in ALL_TAG_IDS
         ]
-        labels += list(self._config.custom_labels)
-        frames = max(1, self._config.ai_sample_frames) * len(targets)
+        video_counts = sample_counts(
+            (rec.duration for rec in targets), self._config.frame_policy
+        )
+        frames = sum(video_counts)
         dialog = UploadConfirmDialog(
             len(targets), frames, mode,
             self._config.cloud_base_url,
             self._config.cloud_model or self._tr("settings.model_none"),
             labels, self._tr, self, tokens=self._palette,
+            custom_labels=list(self._config.custom_labels),
+            on_labels_saved=self._save_confirm_labels,
+            frame_counts=video_counts,
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.start_cloud_tagging(targets, mode)
+
+    def _save_confirm_labels(self, labels: list[str]) -> None:
+        """Edits made from the upload card's My labels entry are global."""
+        self._config.custom_labels = list(labels)
+        self._config.save()
 
     def start_cloud_tagging(self, targets: list, mode: str) -> None:
         """Cloud / hybrid run: validate config, then start the worker."""
@@ -1353,6 +1364,7 @@ class MainWindow(QMainWindow):
             mode=mode,
             custom_labels=list(self._config.custom_labels),
             sample_frames=self._config.ai_sample_frames,
+            frame_policy=self._config.frame_policy,
             threads=self._config.ai_threads,
             local_model_path=local_model,
             upload_target_only=self._config.upload_target_only,
@@ -1403,6 +1415,7 @@ class MainWindow(QMainWindow):
         self._tag_worker = TagWorker(
             targets, model, self._ffmpeg_path,
             sample_frames=self._config.ai_sample_frames,
+            frame_policy=self._config.frame_policy,
             threads=self._config.ai_threads,
             conf=self._config.ai_conf,
             parent=self,

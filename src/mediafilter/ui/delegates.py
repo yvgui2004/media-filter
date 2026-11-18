@@ -158,34 +158,12 @@ class RecordDelegate(QStyledItemDelegate):
 
     def _paint_bitrate(self, painter: QPainter, rect, rec) -> None:
         c = self._colors
-        meter_w = 56
-        meter_h = 4
-        gap = 10
-        pad = 10
         color = c["red"] if rec.error else c["ink_2"]
-        if rec.bitrate > 0:
-            text = f"{rec.bitrate / 1_000_000:.1f}"
-            fill = min(1.0, rec.bitrate / 100_000_000)
-        else:
-            text = "—"
-            fill = 0.0
-        value_rect = rect.adjusted(6, 0, -(pad + meter_w + gap), 0)
+        text = f"{rec.bitrate / 1_000_000:.1f}" if rec.bitrate > 0 else "—"
         self._paint_text(
-            painter, value_rect, text, self._fonts["small"], color,
+            painter, rect.adjusted(6, 0, -10, 0), text, self._fonts["small"], color,
             Qt.AlignRight | Qt.AlignVCenter,
         )
-        if fill > 0:
-            track = QRectF(
-                rect.right() - pad - meter_w,
-                rect.center().y() - meter_h / 2,
-                meter_w, meter_h,
-            )
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(c["line"])
-            painter.drawRoundedRect(track, 2, 2)
-            filled = QRectF(track.left(), track.top(), track.width() * fill, track.height())
-            painter.setBrush(c["accent"])
-            painter.drawRoundedRect(filled, 2, 2)
 
     def _paint_badge(self, painter: QPainter, rect, extension: str) -> None:
         c = self._colors

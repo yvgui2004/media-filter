@@ -18,6 +18,7 @@ from PySide6.QtCore import QThread, Signal
 from ..core.cloud_tagger import (
     CloudTagConfig, cloud_model_id, cloud_tag_video, safe_error,
 )
+from ..core.sampling import normalize_policy, sample_count
 from ..core.tag_cache import TagCache, cache_key
 from ..core.tagger import Detector, TagResult, tag_media
 
@@ -39,6 +40,7 @@ class CloudTagWorker(QThread):
         threads: int = 2,
         local_model_path: str | Path | None = None,
         upload_target_only: bool = True,
+        frame_policy: str | None = None,
         cache_path: str | Path | None = None,
         parent=None,
     ) -> None:
@@ -49,6 +51,7 @@ class CloudTagWorker(QThread):
         self._mode = mode
         self._custom = list(custom_labels or [])
         self._sample = max(1, sample_frames)
+        self._policy = normalize_policy(frame_policy)
         self._threads = max(1, threads)
         self._local_model = Path(local_model_path) if local_model_path else None
         self._upload_target_only = upload_target_only
@@ -68,6 +71,8 @@ class CloudTagWorker(QThread):
             )
             if self._local_model is not None:
                 model_id += f"|{self._local_model.name}:{self._local_model.stat().st_size}"
+            if self._policy is not None:
+                model_id += f"|frames:{self._policy}"
             detector = None
             if self._mode == "hybrid":
                 if self._local_model is None or not self._local_model.is_file():
@@ -122,6 +127,11 @@ class CloudTagWorker(QThread):
     def _tag_one(self, detector: Detector | None, rec) -> TagResult:
         if rec.duration <= 0:
             return TagResult(error="duration unknown")
+        count = (
+            sample_count(self._policy, rec.duration)
+            if self._policy is not None
+            else self._sample
+        )
 
         local = TagResult()
         if self._mode == "hybrid":
@@ -129,7 +139,7 @@ class CloudTagWorker(QThread):
                 return TagResult(error="混合模式需要本地 ONNX 模型")
             local = tag_media(
                 detector, self._ffmpeg, rec.path, rec.duration,
-                sample_count=self._sample, cancel_event=self._cancel,
+                sample_count=count, cancel_event=self._cancel,
             )
             if local.error:
                 return local
@@ -145,7 +155,7 @@ class CloudTagWorker(QThread):
                 self._config.base_url, self._config.api_key,
                 self._config.model, labels, self._config.timeout,
             ),
-            sample_count=self._sample,
+            sample_count=count,
             context_tags=local.tags,
             cancel_event=self._cancel,
         )

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from ..core.sampling import normalize_policy, sample_count
 from ..core.tag_cache import TagCache, cache_key
 from ..core.tagger import Detector, TagResult, tag_media
 
@@ -20,12 +21,14 @@ class TagWorker(QThread):
 
     def __init__(self, records, model_path: str | Path, ffmpeg_path: str,
                  sample_frames: int = 3, threads: int = 2, conf: float = 0.25,
+                 frame_policy: str | None = None,
                  cache_path: str | Path | None = None, parent=None):
         super().__init__(parent)
         self._records = list(records)
         self._model_path = Path(model_path)
         self._ffmpeg = ffmpeg_path
         self._sample = max(1, sample_frames)
+        self._policy = normalize_policy(frame_policy)
         self._threads = max(1, threads)
         self._conf = conf
         self._cache = TagCache(cache_path)
@@ -38,6 +41,8 @@ class TagWorker(QThread):
         total = len(self._records)
         done = tagged_ok = failed = 0
         model_id = f"{self._model_path.name}:{self._model_path.stat().st_size}"
+        if self._policy is not None:
+            model_id += f"|frames:{self._policy}"
         try:
             pending = []
             for rec in self._records:
@@ -87,7 +92,12 @@ class TagWorker(QThread):
     def _tag_one(self, detector: Detector, rec) -> TagResult:
         if rec.duration <= 0:
             return TagResult(error="duration unknown")
+        count = (
+            sample_count(self._policy, rec.duration)
+            if self._policy is not None
+            else self._sample
+        )
         return tag_media(
             detector, self._ffmpeg, rec.path, rec.duration,
-            sample_count=self._sample, cancel_event=self._cancel,
+            sample_count=count, cancel_event=self._cancel,
         )

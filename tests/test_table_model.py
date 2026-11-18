@@ -35,6 +35,23 @@ def test_sort_role_returns_numeric_for_size():
     assert model.data(idx, SORT_ROLE) == 12345
 
 
+def test_numeric_headers_follow_their_values_alignment():
+    model = FileRecordModel()
+    for col in (
+        FileRecordModel.COL_SIZE,
+        FileRecordModel.COL_DURATION,
+        FileRecordModel.COL_BITRATE,
+    ):
+        align = model.headerData(col, Qt.Horizontal, Qt.TextAlignmentRole)
+        assert isinstance(align, int)
+        assert align & int(Qt.AlignRight)
+    name_align = model.headerData(
+        FileRecordModel.COL_NAME, Qt.Horizontal, Qt.TextAlignmentRole
+    )
+    assert isinstance(name_align, int)
+    assert name_align & int(Qt.AlignLeft)
+
+
 def test_set_checked_bulk_updates_and_emits_once():
     model = FileRecordModel()
     model.set_records([_rec("a.mp4"), _rec("b.mp4")])

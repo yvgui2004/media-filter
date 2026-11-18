@@ -38,25 +38,27 @@ def _contrast(a: str, b: str) -> float:
 
 
 @pytest.mark.parametrize("tokens", [LIGHT, DARK], ids=["light", "dark"])
-def test_ai_mode_chip_uses_label_color_without_second_blue(qt_app, tokens):
-    """The mode word must be the exact color of the "AI 识别" label.
+def test_ai_button_is_a_quiet_outline_shell(qt_app, tokens):
+    """The split button is one white capsule with an accent sparkle.
 
-    A translucent on-accent tint put the 10px word at 3.5:1 and read as
-    pale; a tonal pill fixed that but introduced a second blue, and an
-    outline read as a stray white box. The chip is plain text now: no
-    fill, no border, the same on_accent color as the label.
+    No solid accent slab: the label is ink, the mode is quiet metadata
+    behind a hairline divider, and the shell border carries the hover.
     """
     assert qt_app is not None
     switch = AiModeSwitch(lambda key, **_: key, tokens)
     label = regex.search(r"color:\s*([^;]+);", switch.main.text_label.styleSheet())
     chip = regex.search(r"color:\s*([^;]+);", switch.main.chip.styleSheet())
     assert label is not None and chip is not None
-    assert chip.group(1).strip() == label.group(1).strip()
-    assert chip.group(1).strip().lower() == tokens["on_accent"].lower()
-    assert "background: transparent" in switch.main.chip.styleSheet()
-    assert "border" not in switch.main.chip.styleSheet()
-    # Same contrast as the label itself, since both sit on the accent fill.
-    assert _contrast(tokens["accent"], tokens["on_accent"]) >= 4.5
+    assert label.group(1).strip().lower() == tokens["ink"].lower()
+    assert chip.group(1).strip().lower() == tokens["ink_3"].lower()
+    chip_style = switch.main.chip.styleSheet()
+    assert "background: transparent" in chip_style
+    assert "border-left: 1px solid" in chip_style
+    shell = switch.styleSheet()
+    assert tokens["surface"].lower() in shell.lower()
+    assert "border-radius: 8px" in shell
+    # The label sits on the surface, not on an accent fill.
+    assert _contrast(tokens["surface"], tokens["ink"]) >= 4.5
 
 
 @pytest.fixture(scope="module")

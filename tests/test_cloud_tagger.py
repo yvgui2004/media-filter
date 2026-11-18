@@ -159,3 +159,27 @@ def test_hybrid_keeps_local_tags_when_cloud_fails(qt_app, monkeypatch):
     assert calls == ["cloud"]
     assert result.tags == ["人物"]
     assert result.error == "HTTP 401：invalid key"
+
+
+def test_worker_applies_the_frame_policy_to_both_passes(qt_app, monkeypatch):
+    counts: list[int] = []
+
+    def fake_local(*_args, **kwargs):
+        counts.append(kwargs["sample_count"])
+        return TagResult(tags=["人物"], frames=kwargs["sample_count"])
+
+    def fake_cloud(*_args, **kwargs):
+        counts.append(kwargs["sample_count"])
+        return TagResult(tags=["游戏"], frames=kwargs["sample_count"])
+
+    monkeypatch.setattr(worker_module, "tag_media", fake_local)
+    monkeypatch.setattr(worker_module, "cloud_tag_video", fake_cloud)
+    assert qt_app is not None
+    worker = CloudTagWorker(
+        [_record()], "ffmpeg", CONFIG, mode="hybrid",
+        custom_labels=["游戏"], frame_policy="fast", threads=1,
+        local_model_path="model.onnx",
+    )
+    result = worker._tag_one(cast(Any, object()), _record())
+    assert counts == [4, 4]
+    assert result.tags == ["人物", "游戏"]

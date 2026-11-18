@@ -49,8 +49,14 @@ class FileRecordModel(QAbstractTableModel):
         return 0 if parent.isValid() else self.N_COLS
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return self._headers[section]
+        if orientation == Qt.Horizontal:
+            if role == Qt.DisplayRole:
+                return self._headers[section]
+            if role == Qt.TextAlignmentRole:
+                # Numbers are right-aligned, so their headers follow them.
+                if section in (self.COL_SIZE, self.COL_DURATION, self.COL_BITRATE):
+                    return int(Qt.AlignRight | Qt.AlignVCenter)
+                return int(Qt.AlignLeft | Qt.AlignVCenter)
         return None
 
     def set_headers(self, headers: list[str]) -> None:

@@ -39,6 +39,13 @@ SHADOW = 14
 MIN_POPUP_WIDTH = 520
 LIST_HEIGHT = 280
 
+# The tabbed settings page enlarges the model field and its popup by 1.15x.
+_COMPACT_SCALE = 1.15
+
+
+def _px(value: float, compact: bool) -> int:
+    return int(round(value * _COMPACT_SCALE)) if compact else int(round(value))
+
 
 def _t(tr, key: str, fallback: str) -> str:
     text = tr(key)
@@ -79,8 +86,11 @@ def _badge_spec(
     )
 
 
-def _badge_width(font: QFont, text: str) -> int:
-    return max(34, QFontMetrics(font).horizontalAdvance(text) + 14)
+def _badge_width(font: QFont, text: str, compact: bool = False) -> int:
+    return max(
+        _px(34, compact),
+        QFontMetrics(font).horizontalAdvance(text) + _px(14, compact),
+    )
 
 
 def _draw_badge(
@@ -90,10 +100,11 @@ def _draw_badge(
     foreground: QColor,
     background: QColor,
     font: QFont,
+    compact: bool = False,
 ) -> None:
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(background)
-    painter.drawRoundedRect(rect, 5, 5)
+    painter.drawRoundedRect(rect, _px(5, compact), _px(5, compact))
     painter.setFont(font)
     painter.setPen(foreground)
     painter.drawText(
@@ -109,10 +120,13 @@ class _ModelDelegate(QStyledItemDelegate):
         tokens: dict[str, str],
         tr,
         parent: QWidget,
+        compact: bool = False,
     ) -> None:
         super().__init__(parent)
         self._tokens = tokens
         self._tr = tr
+        self._compact = compact
+        self._k = _COMPACT_SCALE if compact else 1.0
 
     def sizeHint(
         self,
@@ -121,7 +135,7 @@ class _ModelDelegate(QStyledItemDelegate):
     ) -> QSize:
         data = index.data(Qt.ItemDataRole.UserRole)
         height = GROUP_HEIGHT if isinstance(data, dict) else ROW_HEIGHT
-        return QSize(option.rect.width(), height)
+        return QSize(option.rect.width(), _px(height, self._compact))
 
     def paint(
         self,
@@ -136,21 +150,23 @@ class _ModelDelegate(QStyledItemDelegate):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
 
+        k = self._k
+
         if isinstance(data, dict):
             font = QFont(option.font)
-            font.setPixelSize(10)
+            font.setPixelSize(_px(11, self._compact))
             font.setWeight(QFont.Weight.DemiBold)
             painter.setFont(font)
             painter.setPen(parse_color(tokens["ink_3"]))
             painter.drawText(
-                rect.adjusted(12, 0, -12, 0),
+                rect.adjusted(12 * k, 0, -12 * k, 0),
                 int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
                 str(data.get("label") or ""),
             )
             hint = str(data.get("hint") or "")
             if hint:
                 painter.drawText(
-                    rect.adjusted(12, 0, -12, 0),
+                    rect.adjusted(12 * k, 0, -12 * k, 0),
                     int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
                     hint,
                 )
@@ -169,53 +185,53 @@ class _ModelDelegate(QStyledItemDelegate):
         selected = model.id == selected_id
         current = index.row() == current_row
         hovered = index.row() == hover_row
-        row_rect = rect.adjusted(0, 2, 0, -2)
+        row_rect = rect.adjusted(0, 2 * k, 0, -2 * k)
         if selected or current or hovered:
             painter.setPen(Qt.PenStyle.NoPen)
             key = "accent_soft" if selected else "row_hover"
             painter.setBrush(parse_color(tokens[key]))
-            painter.drawRoundedRect(row_rect, 8, 8)
+            painter.drawRoundedRect(row_rect, 8 * k, 8 * k)
 
         # Radio marker.
-        center = QPointF(18, row_rect.center().y())
+        center = QPointF(18 * k, row_rect.center().y())
         if selected:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(parse_color(tokens["accent"]))
-            painter.drawEllipse(center, 5.5, 5.5)
+            painter.drawEllipse(center, 5.5 * k, 5.5 * k)
             painter.setBrush(parse_color(tokens["on_accent"]))
-            painter.drawEllipse(center, 2.2, 2.2)
+            painter.drawEllipse(center, 2.2 * k, 2.2 * k)
         else:
-            painter.setPen(QPen(parse_color(tokens["ink_3"]), 1.2))
+            painter.setPen(QPen(parse_color(tokens["ink_3"]), 1.2 * k))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(center, 5.2, 5.2)
+            painter.drawEllipse(center, 5.2 * k, 5.2 * k)
 
         font = QFont(option.font)
-        font.setPixelSize(13)
+        font.setPixelSize(_px(13, self._compact))
         font.setWeight(QFont.Weight.Medium)
         painter.setFont(font)
         name_metrics = QFontMetrics(font)
 
         badge_font = QFont(option.font)
-        badge_font.setPixelSize(10)
+        badge_font.setPixelSize(_px(11, self._compact))
         badge_font.setWeight(QFont.Weight.Medium)
         badge_text, badge_fg, badge_bg = _badge_spec(tokens, self._tr, model)
-        badge_w = _badge_width(badge_font, badge_text)
+        badge_w = _badge_width(badge_font, badge_text, self._compact)
         badge_rect = QRectF(
-            row_rect.right() - 10 - badge_w,
-            row_rect.center().y() - 9.5,
+            row_rect.right() - 10 * k - badge_w,
+            row_rect.center().y() - 9.5 * k,
             badge_w,
-            19,
+            19 * k,
         )
 
         context_rect = QRectF(
-            badge_rect.left() - 52,
-            row_rect.center().y() - 9,
-            44,
-            18,
+            badge_rect.left() - 52 * k,
+            row_rect.center().y() - 9 * k,
+            44 * k,
+            18 * k,
         )
         if model.context:
             context_font = QFont(option.font)
-            context_font.setPixelSize(10)
+            context_font.setPixelSize(_px(11, self._compact))
             painter.setFont(context_font)
             painter.setPen(parse_color(tokens["ink_3"]))
             painter.drawText(
@@ -224,8 +240,10 @@ class _ModelDelegate(QStyledItemDelegate):
                 model.context,
             )
 
-        text_left = 34.0
-        text_right = (context_rect.left() if model.context else badge_rect.left()) - 10
+        text_left = 34.0 * k
+        text_right = (
+            context_rect.left() if model.context else badge_rect.left()
+        ) - 10 * k
         text_width = max(0.0, text_right - text_left)
 
         painter.setFont(font)
@@ -236,14 +254,14 @@ class _ModelDelegate(QStyledItemDelegate):
             model.name, Qt.TextElideMode.ElideRight, int(text_width)
         )
         painter.drawText(
-            QRectF(text_left, row_rect.top() + 7, text_width, 19),
+            QRectF(text_left, row_rect.top() + 7 * k, text_width, 19 * k),
             int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
             name,
         )
 
         id_font = QFont(option.font)
         id_font.setFamilies(["Cascadia Mono", "Consolas", "Microsoft YaHei UI"])
-        id_font.setPixelSize(10)
+        id_font.setPixelSize(_px(11, self._compact))
         painter.setFont(id_font)
         painter.setPen(parse_color(tokens["ink_3"]))
         id_metrics = QFontMetrics(id_font)
@@ -251,13 +269,14 @@ class _ModelDelegate(QStyledItemDelegate):
             model.id, Qt.TextElideMode.ElideRight, int(text_width)
         )
         painter.drawText(
-            QRectF(text_left, row_rect.top() + 27, text_width, 16),
+            QRectF(text_left, row_rect.top() + 27 * k, text_width, 16 * k),
             int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
             model_id,
         )
 
         _draw_badge(
-            painter, badge_rect, badge_text, badge_fg, badge_bg, badge_font
+            painter, badge_rect, badge_text, badge_fg, badge_bg, badge_font,
+            self._compact,
         )
         painter.restore()
 
@@ -272,11 +291,13 @@ class _ModelList(QListWidget):
         tokens: dict[str, str],
         tr,
         parent: QWidget | None = None,
+        compact: bool = False,
     ) -> None:
         super().__init__(parent)
         self.hover_row = -1
         self.current_row = -1
         self.selected_id = ""
+        self._compact = compact
         self.setObjectName("ModelList")
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -286,7 +307,7 @@ class _ModelList(QListWidget):
         self.setUniformItemSizes(False)
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
-        self.setItemDelegate(_ModelDelegate(tokens, tr, self))
+        self.setItemDelegate(_ModelDelegate(tokens, tr, self, compact=compact))
         self.setStyleSheet(
             "QListWidget { background: transparent; border: none; outline: none; }"
             "QListWidget::item { background: transparent; border: none; }"
@@ -313,11 +334,13 @@ class _ModelList(QListWidget):
             if kind == "group":
                 item.setData(Qt.ItemDataRole.UserRole, payload)
                 item.setFlags(Qt.ItemFlag.NoItemFlags)
-                item.setSizeHint(QSize(10, GROUP_HEIGHT))
+                item.setSizeHint(
+                    QSize(10, _px(GROUP_HEIGHT, self._compact))
+                )
             else:
                 item.setData(Qt.ItemDataRole.UserRole, payload)
                 item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-                item.setSizeHint(QSize(10, ROW_HEIGHT))
+                item.setSizeHint(QSize(10, _px(ROW_HEIGHT, self._compact)))
                 model_rows.append(self.count())
             self.addItem(item)
         if not model_rows:
@@ -400,6 +423,7 @@ class _ModelPopup(QWidget):
         tokens: dict[str, str],
         tr,
         anchor_width: int,
+        compact: bool = False,
     ) -> None:
         super().__init__(
             None,
@@ -411,6 +435,8 @@ class _ModelPopup(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
         self._tokens = tokens
         self._tr = tr
+        self._compact = compact
+        self._k = _COMPACT_SCALE if compact else 1.0
         self._dark = parse_color(tokens["surface"]).lightness() < 128
         self._models = models
         self._selected_id = selected_id
@@ -418,41 +444,45 @@ class _ModelPopup(QWidget):
         self._manual_visible = False
         self._loading = False
         self._error = ""
-        self._card_w = max(anchor_width, MIN_POPUP_WIDTH)
+        self._card_w = max(anchor_width, _px(MIN_POPUP_WIDTH, compact))
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(SHADOW, SHADOW, SHADOW, SHADOW)
+        shadow = _px(SHADOW, compact)
+        outer.setContentsMargins(shadow, shadow, shadow, shadow)
         outer.setSpacing(0)
         self._card = QFrame(self)
         self._card.setObjectName("ModelCard")
         self._card.setStyleSheet(
             f"QFrame#ModelCard {{ background: {tokens['surface']}; "
             f"border: 1px solid {tokens['line_strong']}; "
-            f"border-radius: {CARD_RADIUS}px; }}"
+            f"border-radius: {_px(CARD_RADIUS, compact)}px; }}"
         )
         outer.addWidget(self._card)
 
         body = QVBoxLayout(self._card)
-        body.setContentsMargins(10, 10, 10, 10)
-        body.setSpacing(8)
+        margin = _px(10, compact)
+        body.setContentsMargins(margin, margin, margin, margin)
+        body.setSpacing(_px(8, compact))
 
         search_row = QHBoxLayout()
-        search_row.setSpacing(6)
+        search_row.setSpacing(_px(6, compact))
         self._search = QLineEdit()
         self._search.setObjectName("ModelSearch")
-        self._search.setFixedHeight(34)
+        self._search.setFixedHeight(_px(34, compact))
         self._search.setPlaceholderText(
             _t(tr, "settings.model_search", "搜索模型名或 ID")
         )
         self._search.setClearButtonEnabled(True)
         self._search.addAction(
-            line_icon("search", tokens["ink_3"], 14),
+            line_icon("search", tokens["ink_3"], _px(14, compact)),
             QLineEdit.ActionPosition.LeadingPosition,
         )
         self._search.setStyleSheet(
             f"QLineEdit#ModelSearch {{ background: {tokens['surface']}; "
-            f"border: 1px solid {tokens['line_strong']}; border-radius: 8px; "
-            f"padding: 0 9px; color: {tokens['ink']}; font-size: 13px; }}"
+            f"border: 1px solid {tokens['line_strong']}; "
+            f"border-radius: {_px(8, compact)}px; "
+            f"padding: 0 {_px(9, compact)}px; color: {tokens['ink']}; "
+            f"font-size: {_px(13, compact)}px; }}"
             f"QLineEdit#ModelSearch:focus {{ border-color: {tokens['accent']}; }}"
             f"QLineEdit#ModelSearch::placeholder {{ color: {tokens['ink_3']}; }}"
         )
@@ -461,37 +491,43 @@ class _ModelPopup(QWidget):
 
         self._refresh = QToolButton()
         self._refresh.setProperty("variant", "icon")
-        self._refresh.setFixedSize(34, 34)
-        self._refresh.setIconSize(QSize(15, 15))
-        self._refresh.setIcon(line_icon("refresh", tokens["ink_3"], 15))
+        refresh_size = _px(34, compact)
+        self._refresh.setFixedSize(refresh_size, refresh_size)
+        self._refresh.setIconSize(QSize(_px(15, compact), _px(15, compact)))
+        self._refresh.setIcon(
+            line_icon("refresh", tokens["ink_3"], _px(15, compact))
+        )
         self._refresh.setToolTip(_t(tr, "settings.model_refresh", "刷新模型列表"))
         self._refresh.clicked.connect(lambda: self.refreshRequested.emit())
         search_row.addWidget(self._refresh)
         body.addLayout(search_row)
 
         meta_row = QHBoxLayout()
-        meta_row.setContentsMargins(2, 0, 2, 0)
-        meta_row.setSpacing(8)
+        meta_margin = _px(2, compact)
+        meta_row.setContentsMargins(meta_margin, 0, meta_margin, 0)
+        meta_row.setSpacing(_px(8, compact))
         self._meta_left = QLabel()
         self._meta_right = QLabel()
         for label in (self._meta_left, self._meta_right):
             label.setStyleSheet(
-                f"color: {tokens['ink_3']}; font-size: 10px; border: none;"
+                f"color: {tokens['ink_3']}; font-size: {_px(11, compact)}px; "
+                "border: none;"
             )
         meta_row.addWidget(self._meta_left, 1)
         meta_row.addWidget(self._meta_right, 0, Qt.AlignmentFlag.AlignRight)
         body.addLayout(meta_row)
 
-        self._list = _ModelList(tokens, tr, self._card)
-        self._list.setFixedHeight(LIST_HEIGHT)
+        self._list = _ModelList(tokens, tr, self._card, compact=compact)
+        self._list.setFixedHeight(_px(LIST_HEIGHT, compact))
         self._list.picked.connect(self._pick)
         body.addWidget(self._list)
         self._search.textChanged.connect(self._on_search_changed)
         self._search.returnPressed.connect(self._choose_current)
 
         footer_row = QHBoxLayout()
-        footer_row.setContentsMargins(2, 0, 2, 0)
-        footer_row.setSpacing(8)
+        footer_margin = _px(2, compact)
+        footer_row.setContentsMargins(footer_margin, 0, footer_margin, 0)
+        footer_row.setSpacing(_px(8, compact))
         self._manual_link = QPushButton(
             _t(tr, "settings.model_manual", "手动输入模型 ID")
         )
@@ -499,8 +535,8 @@ class _ModelPopup(QWidget):
         self._manual_link.setCursor(Qt.CursorShape.PointingHandCursor)
         self._manual_link.setStyleSheet(
             "QPushButton#InlineLink { background: transparent; border: none; "
-            f"color: {tokens['accent']}; font-size: 10px; font-weight: 600; "
-            "padding: 0; }"
+            f"color: {tokens['accent']}; font-size: {_px(11, compact)}px; "
+            "font-weight: 600; padding: 0; }"
             f"QPushButton#InlineLink:hover {{ color: {tokens['accent_strong']}; }}"
         )
         self._manual_link.clicked.connect(self._toggle_manual)
@@ -510,16 +546,17 @@ class _ModelPopup(QWidget):
             _t(tr, "settings.model_meta_hint", "能力来自模型元数据")
         )
         self._meta_hint.setStyleSheet(
-            f"color: {tokens['ink_3']}; font-size: 10px; border: none;"
+            f"color: {tokens['ink_3']}; font-size: {_px(11, compact)}px; "
+            "border: none;"
         )
         footer_row.addWidget(self._meta_hint)
         body.addLayout(footer_row)
 
         manual_row = QHBoxLayout()
-        manual_row.setSpacing(6)
+        manual_row.setSpacing(_px(6, compact))
         self._manual_input = QLineEdit()
         self._manual_input.setObjectName("FieldInput")
-        self._manual_input.setFixedHeight(34)
+        self._manual_input.setFixedHeight(_px(34, compact))
         self._manual_input.setPlaceholderText(
             _t(tr, "settings.model_manual_placeholder",
                "例如 qwen3-vl-plus 或 my-lab/vision-model")
@@ -528,7 +565,7 @@ class _ModelPopup(QWidget):
         manual_row.addWidget(self._manual_input, 1)
         self._manual_use = QPushButton(_t(tr, "settings.model_use", "使用"))
         self._manual_use.setProperty("variant", "ghost")
-        self._manual_use.setFixedSize(72, 34)
+        self._manual_use.setFixedSize(_px(72, compact), _px(34, compact))
         self._manual_use.setCursor(Qt.CursorShape.PointingHandCursor)
         self._manual_use.clicked.connect(self._use_manual)
         manual_row.addWidget(self._manual_use)
@@ -544,12 +581,15 @@ class _ModelPopup(QWidget):
     # -- geometry / painting ---------------------------------------------
 
     def _apply_geometry(self) -> None:
-        manual_extra = 42 if self._manual_visible else 0
-        self._card_h = (
-            10 + 34 + 8 + 14 + 8 + LIST_HEIGHT + 8 + 22 + 10 + manual_extra
-        )
+        k = self._k
+        manual_extra = 42 * k if self._manual_visible else 0
+        self._card_h = int(round(
+            (10 + 34 + 8 + 14 + 8 + LIST_HEIGHT + 8 + 22 + 10) * k
+            + manual_extra
+        ))
+        shadow = _px(SHADOW, self._compact)
         self.setFixedSize(
-            self._card_w + SHADOW * 2, self._card_h + SHADOW * 2
+            self._card_w + shadow * 2, self._card_h + shadow * 2
         )
         if self._anchor is not None and self.isVisible():
             self._position(self._anchor)
@@ -557,6 +597,9 @@ class _ModelPopup(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        k = self._k
+        shadow = _px(SHADOW, self._compact)
+        radius = _px(CARD_RADIUS, self._compact)
         layers = ((10, 25), (6, 35), (3, 45)) if self._dark else (
             (10, 9), (6, 14), (3, 20)
         )
@@ -568,13 +611,13 @@ class _ModelPopup(QWidget):
             painter.setBrush(color)
             painter.drawRoundedRect(
                 QRectF(
-                    SHADOW - spread / 2,
-                    SHADOW - spread / 3 + 3,
-                    self._card_w + spread,
-                    self._card_h + spread,
+                    shadow - spread * k / 2,
+                    shadow - spread * k / 3 + 3 * k,
+                    self._card_w + spread * k,
+                    self._card_h + spread * k,
                 ),
-                CARD_RADIUS + spread / 3,
-                CARD_RADIUS + spread / 3,
+                radius + spread * k / 3,
+                radius + spread * k / 3,
             )
         painter.end()
 
@@ -801,10 +844,12 @@ class ModelPicker(QWidget):
         tr,
         tokens: dict[str, str] | None = None,
         parent: QWidget | None = None,
+        compact: bool = False,
     ) -> None:
         super().__init__(parent)
         self._tr = tr
         self._tokens = tokens or LIGHT
+        self._compact = compact
         self._models: list[ModelInfo] = []
         self._model: ModelInfo | None = None
         self._capability_override: str | None = None
@@ -819,7 +864,7 @@ class ModelPicker(QWidget):
         self._suppress_timer.setSingleShot(True)
         self._suppress_timer.setInterval(220)
         self._suppress_timer.timeout.connect(self._clear_suppress)
-        self.setFixedHeight(FIELD_HEIGHT)
+        self.setFixedHeight(_px(FIELD_HEIGHT, compact))
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
@@ -933,19 +978,34 @@ class ModelPicker(QWidget):
         painter.setBrush(
             parse_color(tokens["surface"] if enabled else tokens["canvas"])
         )
-        painter.drawRoundedRect(ring, FIELD_RADIUS, FIELD_RADIUS)
+        painter.drawRoundedRect(
+            ring, _px(FIELD_RADIUS, self._compact),
+            _px(FIELD_RADIUS, self._compact),
+        )
 
-        icon_rect = QRectF(10, (self.height() - 28) / 2, 28, 28)
+        k = _COMPACT_SCALE if self._compact else 1.0
+        icon_size = 28 * k
+        icon_rect = QRectF(
+            10 * k, (self.height() - icon_size) / 2, icon_size, icon_size
+        )
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(_with_alpha(tokens["accent"], 18))
-        painter.drawRoundedRect(icon_rect, 7, 7)
-        line_icon("cube", tokens["accent"], 15).paint(
-            painter, QRect(16, int(icon_rect.center().y() - 8), 16, 16)
+        painter.drawRoundedRect(icon_rect, 7 * k, 7 * k)
+        cube_size = _px(15, self._compact)
+        line_icon("cube", tokens["accent"], cube_size).paint(
+            painter,
+            QRect(
+                int(16 * k),
+                int(icon_rect.center().y() - 8 * k),
+                int(16 * k), int(16 * k),
+            ),
         )
 
         model = self._model
         name_font = QFont(self.font())
-        name_font.setPixelSize(13)
+        name_font.setPixelSize(
+            _px(12 if self._compact else 13, self._compact)
+        )
         name_font.setWeight(QFont.Weight.Medium)
         painter.setFont(name_font)
         name_metrics = QFontMetrics(name_font)
@@ -968,7 +1028,9 @@ class ModelPicker(QWidget):
             )
 
         badge_font = QFont(self.font())
-        badge_font.setPixelSize(10)
+        badge_font.setPixelSize(
+            _px(10 if self._compact else 11, self._compact)
+        )
         badge_font.setWeight(QFont.Weight.Medium)
         badge_text = ""
         badge_fg = parse_color(tokens["ink_3"])
@@ -976,24 +1038,28 @@ class ModelPicker(QWidget):
         badge_w = 0
         if model is not None:
             badge_text, badge_fg, badge_bg = _badge_spec(tokens, self._tr, model)
-            badge_w = _badge_width(badge_font, badge_text)
+            badge_w = _badge_width(badge_font, badge_text, self._compact)
 
-        text_left = 48.0
-        text_right = self.width() - 42.0 - (badge_w + 10 if badge_text else 0)
+        text_left = 48.0 * k
+        text_right = self.width() - 42.0 * k - (
+            badge_w + 10 * k if badge_text else 0
+        )
         text_width = max(0.0, text_right - text_left)
         painter.setPen(parse_color(tokens["ink"] if enabled else tokens["ink_3"]))
         name = name_metrics.elidedText(
             name, Qt.TextElideMode.ElideRight, int(text_width)
         )
         painter.drawText(
-            QRectF(text_left, 6, text_width, 19),
+            QRectF(text_left, 6 * k, text_width, 19 * k),
             int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
             name,
         )
 
         id_font = QFont(self.font())
         id_font.setFamilies(["Cascadia Mono", "Consolas", "Microsoft YaHei UI"])
-        id_font.setPixelSize(10)
+        id_font.setPixelSize(
+            _px(10 if self._compact else 11, self._compact)
+        )
         painter.setFont(id_font)
         painter.setPen(parse_color(tokens["ink_3"]))
         id_metrics = QFontMetrics(id_font)
@@ -1001,40 +1067,41 @@ class ModelPicker(QWidget):
             model_id, Qt.TextElideMode.ElideRight, int(text_width)
         )
         painter.drawText(
-            QRectF(text_left, 24, text_width, 16),
+            QRectF(text_left, 24 * k, text_width, 16 * k),
             int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
             model_id,
         )
 
         if badge_text:
             badge_rect = QRectF(
-                self.width() - 38 - badge_w,
-                (self.height() - 19) / 2,
+                self.width() - 38 * k - badge_w,
+                (self.height() - 19 * k) / 2,
                 badge_w,
-                19,
+                19 * k,
             )
             _draw_badge(
-                painter, badge_rect, badge_text, badge_fg, badge_bg, badge_font
+                painter, badge_rect, badge_text, badge_fg, badge_bg, badge_font,
+                self._compact,
             )
 
         chevron_color = (
             tokens["accent"] if enabled and (self._open or focused)
             else tokens["ink_3"]
         )
-        center = QPointF(self.width() - 17, self.height() / 2 + 0.5)
+        center = QPointF(self.width() - 17 * k, self.height() / 2 + 0.5)
         path = QPainterPath()
         if self._open:
-            path.moveTo(center.x() - 4, center.y() + 1.5)
-            path.lineTo(center.x(), center.y() - 2)
-            path.lineTo(center.x() + 4, center.y() + 1.5)
+            path.moveTo(center.x() - 4 * k, center.y() + 1.5 * k)
+            path.lineTo(center.x(), center.y() - 2 * k)
+            path.lineTo(center.x() + 4 * k, center.y() + 1.5 * k)
         else:
-            path.moveTo(center.x() - 4, center.y() - 1.5)
-            path.lineTo(center.x(), center.y() + 2)
-            path.lineTo(center.x() + 4, center.y() - 1.5)
+            path.moveTo(center.x() - 4 * k, center.y() - 1.5 * k)
+            path.lineTo(center.x(), center.y() + 2 * k)
+            path.lineTo(center.x() + 4 * k, center.y() - 1.5 * k)
         painter.setPen(
             QPen(
                 parse_color(chevron_color),
-                1.5,
+                1.5 * k,
                 Qt.PenStyle.SolidLine,
                 Qt.PenCapStyle.RoundCap,
                 Qt.PenJoinStyle.RoundJoin,
@@ -1114,6 +1181,7 @@ class ModelPicker(QWidget):
             self._tokens,
             self._tr,
             self.width(),
+            compact=self._compact,
         )
         popup.picked.connect(self._choose)
         popup.refreshRequested.connect(self.refreshRequested)

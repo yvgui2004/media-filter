@@ -73,6 +73,14 @@ def mode_text(tr, mode: str, field: str = "name") -> str:
     return fallback if text == key else text
 
 
+# The tabbed settings page renders the cards at 1.15x their prototype size.
+_COMPACT_SCALE = 1.15
+
+
+def _scaled(value: float) -> int:
+    return int(round(value * _COMPACT_SCALE))
+
+
 def _label(text: str, name: str) -> QLabel:
     label = QLabel(text)
     label.setObjectName(name)
@@ -99,18 +107,20 @@ class RadioDot(QWidget):
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        rect = QRectF(self.rect()).adjusted(0.75, 0.75, -0.75, -0.75)
+        k = self.width() / 14
+        rect = QRectF(self.rect()).adjusted(0.75 * k, 0.75 * k,
+                                            -0.75 * k, -0.75 * k)
         if self._checked:
             accent = parse_color(self._tokens["accent"])
-            painter.setPen(QPen(accent, 1.5))
+            painter.setPen(QPen(accent, 1.5 * k))
             painter.setBrush(accent)
             painter.drawEllipse(rect)
-            inner = rect.adjusted(4, 4, -4, -4)
+            inner = rect.adjusted(4 * k, 4 * k, -4 * k, -4 * k)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(parse_color(self._tokens["on_accent"]))
             painter.drawEllipse(inner)
         else:
-            painter.setPen(QPen(parse_color(self._tokens["ink_3"]), 1.5))
+            painter.setPen(QPen(parse_color(self._tokens["ink_3"]), 1.5 * k))
             painter.setBrush(parse_color(self._tokens["surface"]))
             painter.drawEllipse(rect)
         painter.end()
@@ -120,24 +130,31 @@ class ModeCard(QAbstractButton):
     """Large selectable card used by the first-run welcome page."""
 
     def __init__(self, mode: str, tr, tokens: dict[str, str],
-                 parent: QWidget | None = None) -> None:
+                 parent: QWidget | None = None, compact: bool = False) -> None:
         super().__init__(parent)
         self._tokens = tokens
         self._mode = mode
+        self._compact = compact
         self._hover = False
         self.setCheckable(True)
         self.setAutoExclusive(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(104)
+        self.setMinimumHeight(_scaled(104) if compact else 112)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(6)
+        if compact:
+            layout.setContentsMargins(
+                _scaled(11), _scaled(10), _scaled(11), _scaled(10)
+            )
+            layout.setSpacing(_scaled(5))
+        else:
+            layout.setContentsMargins(12, 12, 12, 12)
+            layout.setSpacing(6)
 
         top = QHBoxLayout()
-        top.setSpacing(7)
-        self.dot = RadioDot(tokens)
+        top.setSpacing(_scaled(7) if compact else 7)
+        self.dot = RadioDot(tokens, _scaled(14) if compact else 14)
         self.title = _label(mode_text(tr, mode), "ModeTitle")
         top.addWidget(self.dot)
         top.addWidget(self.title)
@@ -157,7 +174,9 @@ class ModeCard(QAbstractButton):
         return self._mode
 
     def sizeHint(self) -> QSize:
-        return QSize(229, 104)
+        if self._compact:
+            return QSize(_scaled(229), _scaled(104))
+        return QSize(229, 112)
 
     def enterEvent(self, event) -> None:
         self._hover = True
@@ -180,8 +199,9 @@ class ModeCard(QAbstractButton):
     def _sync(self) -> None:
         self.dot.set_checked(self.isChecked())
         if self.isChecked():
+            size = _scaled(10) if self._compact else 11
             self.foot.setStyleSheet(
-                f"font-size: 10px; font-weight: 600; color: {self._tokens['accent']};"
+                f"font-size: {size}px; font-weight: 600; color: {self._tokens['accent']};"
             )
         else:
             self.foot.setStyleSheet("")
@@ -190,11 +210,14 @@ class ModeCard(QAbstractButton):
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        rect = QRectF(self.rect()).adjusted(0.75, 0.75, -0.75, -0.75)
+        inset = 0.5 if self._compact else 0.75
+        rect = QRectF(self.rect()).adjusted(inset, inset, -inset, -inset)
         tokens = self._tokens
         selected = self.isChecked()
         if selected:
-            painter.setPen(QPen(parse_color(tokens["accent"]), 1.5))
+            painter.setPen(QPen(
+                parse_color(tokens["accent"]), 1.0 if self._compact else 1.5
+            ))
             painter.setBrush(parse_color(tokens["accent_soft"]))
         else:
             painter.setPen(QPen(
@@ -202,7 +225,8 @@ class ModeCard(QAbstractButton):
                 1.0,
             ))
             painter.setBrush(parse_color(tokens["surface"]))
-        painter.drawRoundedRect(rect, 10, 10)
+        painter.drawRoundedRect(rect, _scaled(10) if self._compact else 10,
+                                _scaled(10) if self._compact else 10)
         painter.end()
 
 
@@ -219,7 +243,7 @@ class DefaultModeRow(QAbstractButton):
         self.setCheckable(True)
         self.setAutoExclusive(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(50)
+        self.setMinimumHeight(58)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         layout = QHBoxLayout(self)
@@ -240,7 +264,7 @@ class DefaultModeRow(QAbstractButton):
         name_row.addWidget(self.badge)
         name_row.addStretch(1)
         copy.addLayout(name_row)
-        self.desc = _label(mode_text(tr, mode, "desc"), "ModeFoot")
+        self.desc = _label(mode_text(tr, mode, "desc"), "ModeDesc")
         self.desc.setWordWrap(True)
         copy.addWidget(self.desc)
         layout.addLayout(copy, 1)
@@ -299,14 +323,15 @@ class ModeCardRow(QWidget):
 
     modeChanged = Signal(str)
 
-    def __init__(self, tr, tokens: dict[str, str], parent: QWidget | None = None) -> None:
+    def __init__(self, tr, tokens: dict[str, str],
+                 parent: QWidget | None = None, compact: bool = False) -> None:
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(_scaled(8) if compact else 12)
         self.cards: dict[str, ModeCard] = {}
         for mode in MODES:
-            card = ModeCard(mode, tr, tokens, self)
+            card = ModeCard(mode, tr, tokens, self, compact=compact)
             card.clicked.connect(lambda *_args, m=mode: self.modeChanged.emit(m))
             self.cards[mode] = card
             layout.addWidget(card, 1)

@@ -253,7 +253,7 @@ QMessageBox QPushButton:default {
 
 #DialogLede { font-size: 13px; color: @ink_2@; }
 #SectionLabel { font-size: 11px; font-weight: 600; color: @ink_3@; }
-#FieldLabel { font-size: 10px; font-weight: 600; color: @ink_3@; }
+#FieldLabel { font-size: 11px; font-weight: 600; color: @ink_3@; }
 #Hint { font-size: 11px; color: @ink_3@; }
 #DialogCount { font-size: 11px; color: @ink_3@; }
 #DialogNote {
@@ -265,6 +265,84 @@ QMessageBox QPushButton:default {
     padding-left: 10px;
 }
 #DialogRule { background: @line@; border: none; }
+
+/* ---------- settings: B4 tabs + summary rail ---------- */
+#SettingsHeading { font-size: 19px; font-weight: 600; color: @ink@; }
+#SettingsSub { font-size: 10.5px; color: @ink_3@; }
+#SettingsHeader { background: @canvas@; }
+#HeaderChip, #HeaderChipAccent {
+    font-size: 9.5px;
+    font-weight: 600;
+    color: @ink_3@;
+    background: @surface@;
+    border: 1px solid @line_strong@;
+    border-radius: 9px;
+    padding: 0 8px;
+}
+#HeaderChipAccent {
+    color: @accent@;
+    background: @accent_soft@;
+    border-color: @accent@;
+}
+#SettingsPane {
+    background: @surface@;
+    border: 1px solid @line@;
+    border-radius: 10px;
+}
+#SettingsStack, #SettingsPage { background: transparent; border: none; }
+#SettingsRail { background: transparent; }
+#PaneTitle { font-size: 13px; font-weight: 600; color: @ink@; }
+#PaneLede { font-size: 10px; color: @ink_3@; }
+#ScopeNote { background: @canvas@; border: none; border-radius: 7px; }
+#ScopeText { font-size: 9.5px; color: @ink_3@; }
+#FactCard {
+    background: @surface@;
+    border: 1px solid @line@;
+    border-radius: 7px;
+}
+#FactLabel {
+    font-size: 8px;
+    font-weight: 600;
+    color: @ink_3@;
+}
+#FactValue { font-size: 10px; font-weight: 600; color: @ink@; }
+#FactDetail { font-size: 8.3px; color: @ink_3@; }
+#RailCard {
+    background: @surface@;
+    border: 1px solid @line@;
+    border-radius: 10px;
+}
+#RailTitle {
+    font-size: 9px;
+    font-weight: 700;
+    color: @ink_3@;
+    padding-bottom: 4px;
+}
+#RailLabel { font-size: 9px; color: @ink_3@; }
+#RailValue { font-size: 9px; font-weight: 600; color: @ink_2@; }
+#RailNote {
+    font-size: 9px;
+    color: @ink_3@;
+    background: @canvas@;
+    border: none;
+    border-radius: 8px;
+    padding: 8px;
+}
+#AdvPanel {
+    background: @surface@;
+    border: 1px solid @line@;
+    border-radius: 9px;
+}
+#PreviewChip {
+    font-size: 9.5px;
+    color: @ink_2@;
+    background: @sunken@;
+    border: none;
+    border-radius: 5px;
+    padding: 0 7px;
+}
+#TagsEmpty { font-size: 9.5px; color: @ink_3@; padding: 4px 0; }
+#DialogFooter, #SettingsFooter { background: @surface@; }
 
 QDialog QPushButton { min-width: 84px; min-height: 34px; }
 
@@ -324,44 +402,44 @@ QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
 QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 
 /* ---------- AI split button ---------- */
+QWidget#AiSwitch {
+    background: @surface@;
+    border: 1px solid @line_strong@;
+    border-radius: 8px;
+}
 QAbstractButton#AiMain {
-    background: @accent@;
+    background: transparent;
     border: none;
-    border-top-left-radius: 8px;
-    border-bottom-left-radius: 8px;
 }
-QAbstractButton#AiMain:hover { background: @accent_strong@; }
-QAbstractButton#AiMain:pressed { background: @accent_strong@; }
 QAbstractButton#AiCaret {
-    background: @accent@;
+    background: transparent;
     border: none;
-    border-top-right-radius: 8px;
-    border-bottom-right-radius: 8px;
+    border-top-right-radius: 7px;
+    border-bottom-right-radius: 7px;
 }
-QAbstractButton#AiCaret:hover { background: @accent_strong@; }
-QAbstractButton#AiCaret:pressed { background: @accent_strong@; }
-QAbstractButton#AiCaret:disabled { background: @accent@; }
+QAbstractButton#AiCaret:hover { background: @accent_soft@; }
+QAbstractButton#AiCaret:disabled { background: transparent; }
 
 /* ---------- recognition settings ---------- */
-QLabel#ModeTitle { font-size: 12px; font-weight: 600; color: @ink@; background: transparent; }
-QLabel#ModeDesc { font-size: 11px; color: @ink_2@; background: transparent; }
-QLabel#ModeFoot { font-size: 10px; color: @ink_3@; background: transparent; }
+QLabel#ModeTitle { font-size: 13px; font-weight: 600; color: @ink@; background: transparent; }
+QLabel#ModeDesc { font-size: 12px; color: @ink_2@; background: transparent; }
+QLabel#ModeFoot { font-size: 11px; color: @ink_3@; background: transparent; }
 QLabel#ModeBadge {
-    font-size: 9px; font-weight: 600;
+    font-size: 10px; font-weight: 600;
     color: @accent@; background: @accent_soft@;
     border: 1px solid @accent@;
     border-radius: 8px;
     padding: 1px 5px;
 }
 QLabel#CurrentBadge {
-    font-size: 9px; font-weight: 600;
+    font-size: 10px; font-weight: 600;
     color: @ink_3@;
     border: 1px solid @line_strong@;
     border-radius: 8px;
     padding: 1px 5px;
 }
-QLabel#FieldNote { font-size: 10px; color: @ink_3@; background: transparent; }
-QLabel#CheckHint { font-size: 10px; color: @ink_3@; background: transparent; }
+QLabel#FieldNote { font-size: 11px; color: @ink_3@; background: transparent; }
+QLabel#CheckHint { font-size: 11px; color: @ink_3@; background: transparent; }
 
 QPushButton#TagChip {
     min-width: 0;
@@ -383,7 +461,7 @@ QPushButton#TagChip:checked {
     font-weight: 600;
 }
 QLabel#TagGroupLabel {
-    font-size: 10px; font-weight: 600; color: @ink_3@; background: transparent;
+    font-size: 11px; font-weight: 600; color: @ink_3@; background: transparent;
 }
 QLabel#TagCount { font-size: 11px; color: @ink_3@; background: transparent; }
 
@@ -488,6 +566,74 @@ QToolButton#SettingsButton[attention="true"] {
     border-radius: 8px;
     background: @accent_soft@;
 }
+
+/* B4 settings at 1.15x: the tabbed page is a 900x570 composition enlarged
+   to 1035x656, so every inner control steps up with the dialog. Scope the
+   overrides to the B4 shell; first-run keeps its original roomier sizing. */
+#SettingsHeader QLabel#SettingsHeading { font-size: 22px; }
+#SettingsHeader QLabel#SettingsSub { font-size: 12px; }
+#SettingsHeader QLabel#HeaderChip, #SettingsHeader QLabel#HeaderChipAccent {
+    font-size: 11px;
+    padding: 0 9px;
+    border-radius: 10px;
+}
+#SettingsPane { border-radius: 12px; }
+#SettingsPane QLabel#PaneTitle { font-size: 15px; }
+#SettingsPane QLabel#PaneLede { font-size: 12px; }
+#SettingsPane QLabel#ScopeText { font-size: 11px; }
+#SettingsPane #ScopeNote { border-radius: 8px; }
+#SettingsPane #FactCard { border-radius: 8px; }
+#SettingsPane QLabel#FactLabel { font-size: 9px; }
+#SettingsPane QLabel#FactValue { font-size: 12px; }
+#SettingsPane QLabel#FactDetail { font-size: 10px; }
+#SettingsPane #AdvPanel { border-radius: 10px; }
+#SettingsPane QLabel#ModeTitle { font-size: 14px; }
+#SettingsPane QLabel#ModeDesc { font-size: 12px; }
+#SettingsPane QLabel#ModeFoot { font-size: 12px; }
+#SettingsPane #FieldLabel { font-size: 12px; }
+#SettingsPane #SectionLabel { font-size: 12px; }
+#SettingsPane #Hint { font-size: 12px; }
+#SettingsPane #DialogCount { font-size: 12px; }
+#SettingsPane #DialogNote { font-size: 12px; padding-left: 10px; }
+#SettingsPane QLabel#FieldNote { font-size: 12px; }
+#SettingsPane QLabel#CheckHint { font-size: 12px; }
+#SettingsPane QLineEdit#FieldInput {
+    min-height: 35px;
+    font-size: 14px;
+    padding: 0 12px;
+    border-radius: 9px;
+}
+#SettingsPane QPushButton#TagChip {
+    height: 23px;
+    padding: 0 12px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+#SettingsPane QLabel#TagGroupLabel { font-size: 10px; }
+#SettingsPane QLabel#TagCount { font-size: 12px; }
+#SettingsPane QPushButton#Segment {
+    height: 25px;
+    padding: 0 12px;
+    font-size: 12px;
+}
+#SettingsPane QPushButton[variant="ghost"] {
+    min-height: 35px;
+    font-size: 13px;
+}
+#SettingsRail QLabel#RailTitle {
+    font-size: 10px;
+    padding-bottom: 5px;
+}
+#SettingsRail QLabel#RailLabel { font-size: 10px; }
+#SettingsRail QLabel#RailValue { font-size: 10px; }
+#SettingsRail QLabel#RailNote {
+    font-size: 10px;
+    padding: 9px;
+    border-radius: 9px;
+}
+#SettingsRail #RailCard { border-radius: 12px; }
+#SettingsFooter QPushButton { min-height: 35px; font-size: 14px; }
+#SettingsFooter QPushButton#LinkButton { font-size: 13px; }
 """
 
 

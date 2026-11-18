@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import subprocess
+import sys
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -237,7 +238,13 @@ def find_model(configured: str | None = None) -> Path | None:
         p = Path(configured).expanduser()
         if p.is_file():
             return p
-    roots = [Path(__file__).resolve().parents[3] / "models", Path.cwd() / "models"]
+    roots: list[Path] = []
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle:
+        # PyInstaller onefile/onedir: data files live beside the extracted
+        # modules, not in the source tree.
+        roots.append(Path(bundle) / "models")
+    roots += [Path(__file__).resolve().parents[3] / "models", Path.cwd() / "models"]
     for root in roots:
         if not root.is_dir():
             continue

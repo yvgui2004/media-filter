@@ -15,7 +15,7 @@ from mediafilter.i18n import Translator
 from mediafilter.ui.main_window import MainWindow
 from mediafilter.ui.select_field import SelectField
 from mediafilter.ui.tokens import LIGHT
-from mediafilter.ui.widgets.mode_switch import AiModeSwitch
+from mediafilter.ui.widgets.mode_switch import AiModeSwitch, ModePopover
 from mediafilter.ui.widgets.settings_dialog import SettingsDialog
 
 LOCALES = Path(__file__).parents[1] / "src" / "mediafilter" / "i18n" / "locales"
@@ -149,6 +149,47 @@ def test_switching_mode_shows_a_toast(qt_app, tmp_path):
         win.close()
 
 
+def test_popover_explains_empty_tags_in_hybrid_mode(qt_app):
+    pop = ModePopover(lambda key, **_: key, LIGHT, tags_count=0)
+    try:
+        assert pop.width() == 360
+        assert pop.cards["hybrid"].scope.text() == "mode.scope_hybrid"
+        assert pop.cards["cloud"].strip._uploaded == 8
+        pop.set_mode("hybrid")
+        assert pop.warning.text() == "mode.popover_need_labels"
+        assert not pop.warning.isHidden()
+        pop.set_tags_count(2)
+        assert pop.warning.isHidden()
+        pop.set_tags_count(0)
+        pop.set_mode("cloud")
+        assert pop.warning.isHidden()
+        pop.set_mode("local")
+        assert pop.warning.isHidden()
+    finally:
+        pop.close()
+
+
+def test_popover_stays_open_only_for_hybrid_without_labels(qt_app):
+    assert qt_app is not None
+    switch = AiModeSwitch(lambda key, **_: key, LIGHT)
+    switch.set_custom_count(0)
+    switch._toggle_popover()
+    pop = switch._popover
+    assert pop is not None
+    try:
+        pop.cards["hybrid"].click()
+        assert switch.mode() == "hybrid"
+        assert pop.isVisible()
+        assert pop.warning.isVisible()
+
+        pop.cards["cloud"].click()
+        assert switch.mode() == "cloud"
+        assert not pop.isVisible()
+        assert not pop.warning.isVisible()
+    finally:
+        pop.close()
+
+
 def _press(widget) -> None:
     pos = QPointF(5, 5)
     event = QMouseEvent(
@@ -187,10 +228,10 @@ def test_settings_dialog_matches_main_window_proportion(qt_app):
     settings = SettingsDialog(Config(), tr, None, tokens=LIGHT)
     welcome = SettingsDialog(Config(), tr, None, tokens=LIGHT, variant="first_run")
     try:
-        assert settings.width() == 900
-        assert 520 <= settings.height() <= 570
-        if settings.height() == 570:
-            # 1200:760 main window, at 75% scale.
+        assert settings.width() == 1035
+        assert 598 <= settings.height() <= 656
+        if settings.height() == 656:
+            # 1200:760 main window, at 75% scale, enlarged 1.15x.
             assert abs(settings.width() / settings.height() - 1200 / 760) < 0.01
         assert welcome.width() == 760
         assert 620 <= welcome.height() <= 815

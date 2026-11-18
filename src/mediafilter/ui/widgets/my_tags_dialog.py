@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, QPoint, Qt, Signal
-from PySide6.QtGui import QDrag
+from PySide6.QtGui import QDrag, QKeyEvent
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QSizePolicy, QSpacerItem, QToolButton, QVBoxLayout,
@@ -25,6 +25,19 @@ from ..icons import line_icon
 from ..tokens import LIGHT
 
 _MIME = "application/x-mediafilter-tag-index"
+
+
+class _TagInput(QLineEdit):
+    """Enter confirms the tag here, before QDialog can press its default button."""
+
+    submitted = Signal()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.submitted.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class _Grip(QLabel):
@@ -227,6 +240,7 @@ class MyTagsDialog(AppDialog):
         self._export_btn = QPushButton(tr("my_tags.export"))
         for button in (self._import_btn, self._export_btn):
             button.setObjectName("InlineLink")
+            button.setAutoDefault(False)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setFixedHeight(20)
             button.setMinimumWidth(0)
@@ -241,7 +255,7 @@ class MyTagsDialog(AppDialog):
 
         add_row = QHBoxLayout()
         add_row.setSpacing(8)
-        self._input = QLineEdit()
+        self._input = _TagInput()
         self._input.setObjectName("FieldInput")
         self._input.setFixedHeight(34)
         self._input.setMaxLength(MAX_LABEL_LENGTH * 4)
@@ -249,6 +263,7 @@ class MyTagsDialog(AppDialog):
         self._input.setAccessibleName(tr("my_tags.placeholder"))
         self._add_btn = dialog_button(tr("my_tags.add"), "ghost")
         self._add_btn.setFixedWidth(84)
+        self._add_btn.setAutoDefault(False)
         add_row.addWidget(self._input, 1)
         add_row.addWidget(self._add_btn)
         layout.addLayout(add_row)
@@ -282,11 +297,12 @@ class MyTagsDialog(AppDialog):
         footer.addStretch(1)
         self._cancel_btn = dialog_button(tr("settings.cancel"))
         self._save_btn = dialog_button(tr("settings.save"), "primary")
+        self._save_btn.setDefault(True)
         footer.addWidget(self._cancel_btn)
         footer.addWidget(self._save_btn)
         layout.addLayout(footer)
 
-        self._input.returnPressed.connect(self._add)
+        self._input.submitted.connect(self._add)
         self._add_btn.clicked.connect(self._add)
         self._import_btn.clicked.connect(self._import)
         self._export_btn.clicked.connect(self._export)

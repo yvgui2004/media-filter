@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 from .config import Config
@@ -28,7 +28,15 @@ def run() -> int:
     font = QFont()
     font.setFamilies(["Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI"])
     font.setPixelSize(13)
-    font.setHintingPreference(QFont.PreferFullHinting)
+    # Match the browser's lighter grayscale antialiasing on scaled displays.
+    # At 100% keep vertical hinting so small table text stays crisp.
+    screen = QGuiApplication.primaryScreen()
+    ratio = screen.devicePixelRatio() if screen is not None else 1.0
+    font.setHintingPreference(
+        QFont.HintingPreference.PreferNoHinting
+        if ratio >= 1.25
+        else QFont.HintingPreference.PreferVerticalHinting
+    )
     app.setFont(font)
 
     config = Config.load()

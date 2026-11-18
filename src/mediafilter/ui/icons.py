@@ -176,6 +176,13 @@ def _draw(p: QPainter, name: str, color: QColor, weight: float = 1.7) -> None:
         p.drawEllipse(QRectF(9.5, 9.5, 5, 5))
         p.drawLine(QPointF(4.5, 4.5), QPointF(19.5, 19.5))
 
+    elif name == "tag":
+        p.drawPolygon([
+            QPointF(4, 4), QPointF(11.5, 4), QPointF(20, 12.5),
+            QPointF(12.5, 20), QPointF(4, 11.5),
+        ])
+        p.drawEllipse(QRectF(7.6, 7.6, 3, 3))
+
     elif name == "cube":
         p.drawPolygon([
             QPointF(12, 3), QPointF(20, 7.5), QPointF(20, 16.5),
