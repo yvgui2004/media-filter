@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re as regex
+import json
 from pathlib import Path
 
 import pytest
@@ -41,9 +42,9 @@ def test_ai_mode_chip_uses_label_color_without_second_blue(qt_app, tokens):
     """The mode word must be the exact color of the "AI 识别" label.
 
     A translucent on-accent tint put the 10px word at 3.5:1 and read as
-    pale; a darker tonal pill fixed that but introduced a second blue
-    inside one button. The chip is outline-only now: transparent fill and
-    on_accent text, so the button has one fill color and one text color.
+    pale; a tonal pill fixed that but introduced a second blue, and an
+    outline read as a stray white box. The chip is plain text now: no
+    fill, no border, the same on_accent color as the label.
     """
     assert qt_app is not None
     switch = AiModeSwitch(lambda key, **_: key, tokens)
@@ -80,6 +81,23 @@ def _window(qt_app, tmp_path, language: str) -> MainWindow:
     win.show()
     qt_app.processEvents()
     return win
+
+
+def test_settings_and_pill_share_one_mode(qt_app, tmp_path):
+    """Switching in Settings must move the main-window pill (and vice versa)."""
+    win = _window(qt_app, tmp_path, "zh")
+    try:
+        win._on_mode_changed("hybrid")
+        assert win._ai.mode() == "hybrid"
+        saved = json.loads((tmp_path / "zh.json").read_text(encoding="utf-8"))
+        assert saved["recognition_mode"] == "hybrid"
+
+        win._config.recognition_mode = "cloud"
+        win._apply_saved_mode()
+        assert win._ai.mode() == "cloud"
+        assert win._mode == "cloud"
+    finally:
+        win.close()
 
 
 def test_english_toolbar_grows_window_instead_of_clipping(qt_app, tmp_path):

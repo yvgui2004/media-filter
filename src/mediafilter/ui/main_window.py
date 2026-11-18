@@ -34,6 +34,8 @@ from PySide6.QtWidgets import (
 )
 
 from ..config import Config
+from ..core import secret_store
+from ..core.cloud_tagger import CloudTagConfig
 from ..core.ffmpeg import Preset, default_presets
 from ..core.formats import format_duration, format_size
 from ..core.probe import find_ffmpeg, find_ffprobe
@@ -48,6 +50,7 @@ from .dialog_base import (
     set_dialog_tokens,
     set_dialog_translator,
 )
+from .cloud_tag_worker import CloudTagWorker
 from .empty_state import EmptyState
 from .filter_proxy import FilterProxyModel
 from .icons import brand_pixmap, line_icon
@@ -1142,7 +1145,20 @@ class MainWindow(QMainWindow):
         ]
 
     def _on_mode_changed(self, mode: str) -> None:
+        if mode not in ("local", "hybrid", "cloud"):
+            mode = "local"
         self._mode = mode
+        # One source of truth: the pill and the settings page edit the same
+        # value, and switching here also becomes the next launch default.
+        self._config.recognition_mode = mode
+        self._config.save()
+        self._update_ai_button()
+
+    def _apply_saved_mode(self) -> None:
+        """Show the mode saved in the settings page on the main window pill."""
+        mode = self._config.recognition_mode
+        self._mode = mode if mode in ("local", "hybrid", "cloud") else "local"
+        self._ai.set_mode(self._mode)
         self._update_ai_button()
 
     def _request_ai(self) -> None:
@@ -1180,10 +1196,93 @@ class MainWindow(QMainWindow):
             labels, self._tr, self, tokens=self._palette,
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.start_cloud_tagging(targets, mode)
+
+    def start_cloud_tagging(self, targets: list, mode: str) -> None:
+        """Cloud / hybrid run: validate config, then start the worker."""
+        if self._tag_worker is not None and self._tag_worker.isRunning():
+            return
+        if not targets:
+            return
+        try:
+            key = secret_store.unprotect(self._config.cloud_api_key_dpapi)
+        except secret_store.SecretStoreError as exc:
             message_box(
-                self, "info", self._tr("app.title"),
-                self._tr("msg.cloud_not_ready"),
+                self, "warning", self._tr("app.title"),
+                self._tr("msg.cloud_key_unreadable", err=str(exc)),
             )
+            return
+        if not key:
+            message_box(
+                self, "warning", self._tr("app.title"),
+                self._tr("msg.cloud_key_missing"),
+            )
+            return
+        if not self._config.cloud_model:
+            message_box(
+                self, "warning", self._tr("app.title"),
+                self._tr("msg.cloud_model_missing"),
+            )
+            return
+        if self._config.cloud_model_capability == "text":
+            message_box(
+                self, "warning", self._tr("app.title"),
+                self._tr("msg.cloud_text_model"),
+            )
+            return
+        if not self._ffmpeg_path:
+            message_box(
+                self, "warning", self._tr("app.title"),
+                self._tr("msg.ffprobe_missing"),
+            )
+            return
+
+        local_model = None
+        if mode == "hybrid":
+            local_model = find_model(self._config.ai_model_path)
+            if local_model is None:
+                message_box(
+                    self, "warning", self._tr("app.title"),
+                    self._tr("msg.ai_model_missing"),
+                )
+                return
+
+        labels = [
+            tag_label(self._tr, tag_id)
+            for tag_id in (self._config.tag_palette or list(DEFAULT_ENABLED))
+            if tag_id in ALL_TAG_IDS
+        ]
+        labels += list(self._config.custom_labels)
+        worker = CloudTagWorker(
+            targets, self._ffmpeg_path,
+            CloudTagConfig(
+                base_url=self._config.cloud_base_url,
+                api_key=key,
+                model=self._config.cloud_model,
+                labels=labels,
+            ),
+            mode=mode,
+            custom_labels=list(self._config.custom_labels),
+            sample_frames=self._config.ai_sample_frames,
+            threads=self._config.ai_threads,
+            local_model_path=local_model,
+            upload_target_only=self._config.upload_target_only,
+            parent=self,
+        )
+        self._scan_line.setRange(0, max(1, len(targets)))
+        self._scan_line.setValue(0)
+        self._scan_line.setVisible(True)
+        self._set_status(self._tr("status.cloud_starting"))
+        self._start_tag_worker(worker)
+
+    def _start_tag_worker(self, worker) -> None:
+        self._tag_worker = worker
+        worker.tagged.connect(self._on_tagged)
+        worker.progress.connect(self._on_tag_progress)
+        worker.finished_ok.connect(self._on_tag_done)
+        worker.failed.connect(self._on_tag_failed)
+        worker.start()
+        self._update_ai_button()
 
     def start_tagging(self, targets: list | None = None) -> None:
         if self._worker is not None and self._worker.isRunning():
@@ -1219,12 +1318,7 @@ class MainWindow(QMainWindow):
             conf=self._config.ai_conf,
             parent=self,
         )
-        self._tag_worker.tagged.connect(self._on_tagged)
-        self._tag_worker.progress.connect(self._on_tag_progress)
-        self._tag_worker.finished_ok.connect(self._on_tag_done)
-        self._tag_worker.failed.connect(self._on_tag_failed)
-        self._tag_worker.start()
-        self._update_ai_button()
+        self._start_tag_worker(self._tag_worker)
 
     def _on_tagged(self, path: str, tags: list, error: str) -> None:
         self._model.update_tags(path, tags, error or None)
@@ -1436,6 +1530,7 @@ class MainWindow(QMainWindow):
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._config.save()
+            self._apply_saved_mode()
             self._ai.set_custom_count(len(self._config.custom_labels))
             self._set_status(self._tr("status.settings_saved"))
 

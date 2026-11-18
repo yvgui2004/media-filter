@@ -38,7 +38,7 @@ class Config:
     cloud_model_cache: dict[str, str] = field(default_factory=dict)
 
     # Recognition behaviour (main-window mode button + settings page)
-    recognition_mode: str = "local"      # default for the next launch: local | hybrid | cloud
+    recognition_mode: str = "local"      # active mode and next-launch default: local | hybrid | cloud
     custom_labels: list[str] = field(default_factory=list)  # user closed set, <= 10
     tag_palette: list[str] = field(default_factory=list)    # enabled built-in tag ids
     frame_policy: str = "auto"           # auto | fast | fine

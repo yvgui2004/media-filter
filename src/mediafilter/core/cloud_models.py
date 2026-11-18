@@ -382,6 +382,49 @@ def _needs_reasoning_none(base_url: str, model: str) -> bool:
     return "deepseek" in lowered or "127.0.0.1:3425" in base_url
 
 
+def chat_completion(
+    base_url: str,
+    api_key: str,
+    model: str,
+    messages: list[dict],
+    timeout: float = 60.0,
+    max_tokens: int = 200,
+) -> str:
+    """POST an OpenAI-style chat request and return the assistant text.
+
+    The key only ever travels in the Authorization header; error messages
+    are short and never echo it.
+    """
+    if not model:
+        raise CloudModelError("请选择模型")
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0,
+        "stream": False,
+    }
+    if _needs_reasoning_none(base_url, model):
+        payload["reasoning_effort"] = "none"
+
+    last_error: CloudModelError | None = None
+    for url in chat_urls(base_url):
+        try:
+            response = _request_json(url, api_key, payload=payload, timeout=timeout)
+        except CloudModelError as exc:
+            if exc.status == 404:
+                last_error = exc
+                continue
+            raise
+        content = _response_text(response)
+        if not content:
+            raise CloudModelError("模型返回了空内容")
+        return content
+    if last_error is not None:
+        raise last_error
+    raise CloudModelError("请填写 BASE URL")
+
+
 def _response_text(payload: object) -> str:
     if not isinstance(payload, dict):
         return ""
