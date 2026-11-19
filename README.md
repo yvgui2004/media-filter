@@ -23,7 +23,7 @@
 | --- | --- | --- |
 | `MediaFilter-0.1.0-win64.zip` | `MediaFilter.exe` (app + YOLOv8n model), `ffmpeg\bin`, `使用说明.txt` | Windows 10 / 11, 64-bit. Nothing else. |
 
-Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatically. First launch takes a few seconds while the single-file exe unpacks itself. / 请保持 `ffmpeg` 文件夹与 exe 的相对位置；单文件程序首次启动需要几秒自解压。
+Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatically. The single-file exe unpacks itself on launch — about 1–3 s on an SSD (measured 1.7 s on the build machine). / 请保持 `ffmpeg` 文件夹与 exe 的相对位置；单文件程序启动时先自解压，SSD 上约 1–3 秒（打包机实测 1.7 秒）。
 
 ## What it does / 它能做什么
 

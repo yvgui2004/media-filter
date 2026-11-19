@@ -99,7 +99,8 @@ Keep the ffmpeg folder next to MediaFilter.exe; do not move the exe alone.
 
 环境要求 / Requirements
 -----------------------
-Windows 10 / 11，64 位。首次启动需要 3-10 秒（单文件程序要先解压自身）。
+Windows 10 / 11，64 位。首次启动约 1-3 秒（单文件程序要先解压自身；
+机械盘或杀软实时扫描时会慢一些）。
 
 配置 / Configuration
 --------------------
