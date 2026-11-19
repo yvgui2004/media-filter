@@ -13,6 +13,18 @@
 
 ---
 
+## Download / 下载 — the fastest way to start / 最快的启用方式
+
+**English** — Grab the latest portable build from **[Releases](https://github.com/yvgui2004/media-filter/releases/latest)**, unzip it, and double-click `MediaFilter.exe`. Python, FFmpeg and the local AI model are all bundled — nothing else to install. This is the fastest way to get started; the source build below is only for development or customization.
+
+**中文** — 从 **[Releases](https://github.com/yvgui2004/media-filter/releases/latest)** 下载最新的便携包，解压后双击 `MediaFilter.exe` 即可使用。Python、FFmpeg 和本地 AI 模型都已内置，**不需要安装任何依赖，这是最快的启用方式**；下面的源码方式只用于开发或自行修改。
+
+| Package / 文件 | Contents / 内容 | Requires / 需要 |
+| --- | --- | --- |
+| `MediaFilter-0.1.0-win64.zip` | `MediaFilter.exe` (app + YOLOv8n model), `ffmpeg\bin`, `使用说明.txt` | Windows 10 / 11, 64-bit. Nothing else. |
+
+Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatically. First launch takes a few seconds while the single-file exe unpacks itself. / 请保持 `ffmpeg` 文件夹与 exe 的相对位置；单文件程序首次启动需要几秒自解压。
+
 ## What it does / 它能做什么
 
 **English**
@@ -31,9 +43,9 @@
 - **批量 FFmpeg** —— 选 x265 / NVENC 预设，复制命令、存成 `.bat`，或直接执行。
 - 格式转换（流拷贝或重编码）、导出 TXT 清单、浅色 / 深色 / 跟随系统主题、中英文界面。
 
-## Install / 安装
+## Install from source / 从源码安装
 
-**Source only / 仅源码** — this repository does not ship a prebuilt `.exe`, FFmpeg binaries, or model weights. Set up the environment once with the steps below.
+**Source only / 仅源码** — this repository stores source only. Prebuilt binaries live in Releases, and the portable zip bundles FFmpeg and the model weights; building from source below does not. Set up the environment once with the steps below.
 
 ### Requirements / 环境要求
 
@@ -131,6 +143,16 @@ Or double-click `run.bat` after step 4. The first launch opens the setup dialog;
 - **`python` 不是内部或外部命令** —— 用 `py` 启动器，或重装 Python 时勾选 “Add Python to PATH”。
 - **重置设置** —— 删除 `%LOCALAPPDATA%\media-filter-v2\config.json`（会同时清掉 API Key 和自定义标签）。
 
+### Build the portable release / 打包便携版（可选）
+
+```powershell
+.venv\Scripts\python.exe -m pip install pyinstaller
+$env:MEDIAFILTER_FFMPEG_DIR = "C:\ffmpeg\bin"   # a folder with ffmpeg.exe + ffprobe.exe
+.venv\Scripts\python.exe packaging\build.py
+```
+
+Output: `release\MediaFilter-<version>-win64\` and the matching `.zip`, plus its SHA-256. The exe is onefile; FFmpeg is copied beside it so each launch does not unpack another ~180 MB. / 输出便携目录和同名 zip，附 SHA-256。exe 为单文件，FFmpeg 放在旁边，避免每次启动重复解压。
+
 ### Tests (optional) / 测试（可选）
 
 ```powershell
@@ -172,6 +194,6 @@ Python 3.10+，界面为 PySide6 / Qt6（Fusion + token 驱动的 QSS 主题、m
 
 The application source is **MIT** — see [LICENSE](LICENSE).
 
-This repository does not redistribute FFmpeg or YOLOv8 model weights. FFmpeg is a separate dependency under its own license (GPL or LGPL depending on the build); Ultralytics YOLOv8 weights are **AGPL-3.0**. If you redistribute them together with this project, comply with those licenses.
+The repository itself stores source only. The **prebuilt portable release** redistributes two third-party components, each under its own license: an FFmpeg build (**GPL-3.0**; source at [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)) and Ultralytics YOLOv8n weights (**AGPL-3.0**; source at [ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)). If you redistribute the portable package, comply with those licenses.
 
-**中文**：应用源码采用 **MIT** 许可，见 [LICENSE](LICENSE)。仓库不再分发 FFmpeg 和 YOLOv8 模型权重：FFmpeg 是独立依赖，按其构建方式适用 GPL 或 LGPL；Ultralytics YOLOv8 权重为 **AGPL-3.0**。如果要随项目一起再分发，请遵守对应许可。
+**中文**：应用源码采用 **MIT** 许可，见 [LICENSE](LICENSE)。仓库本身只存放源码；**预编译便携包**额外包含两个第三方组件，各自适用其原许可：FFmpeg 构建（**GPL-3.0**，源码见 [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)）与 Ultralytics YOLOv8n 权重（**AGPL-3.0**，源码见 [ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)）。再分发便携包时请遵守对应许可。

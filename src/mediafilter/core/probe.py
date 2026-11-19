@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from .models import MediaMetadata
@@ -20,11 +21,28 @@ class ProbeError(Exception):
     """Raised when metadata cannot be read from a file."""
 
 
+def _portable_dirs() -> list[Path]:
+    """Folders that ship beside the app executable.
+
+    The portable build puts ``ffmpeg/bin`` next to ``MediaFilter.exe`` so the
+    package works without installing anything. In onefile mode ``sys.executable``
+    is the real .exe path, not the temporary extraction directory.
+    """
+    if not getattr(sys, "frozen", False):
+        return []
+    root = Path(sys.executable).resolve().parent
+    return [root, root / "ffmpeg" / "bin"]
+
+
 def find_ffprobe() -> str | None:
-    """Locate the ffprobe executable on PATH or common Windows locations."""
+    """Locate ffprobe: PATH, portable folders, then common Windows locations."""
     on_path = shutil.which("ffprobe")
     if on_path:
         return on_path
+    for folder in _portable_dirs():
+        candidate = folder / ("ffprobe.exe" if os.name == "nt" else "ffprobe")
+        if candidate.is_file():
+            return str(candidate)
     if os.name == "nt":
         for candidate in _WIN_PROBE_CANDIDATES:
             if os.path.isfile(candidate):
@@ -41,6 +59,10 @@ def find_ffmpeg(ffprobe_path: str | None = None) -> str | None:
         sibling = Path(ffprobe_path).with_name("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
         if sibling.is_file():
             return str(sibling)
+    for folder in _portable_dirs():
+        candidate = folder / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+        if candidate.is_file():
+            return str(candidate)
     return None
 
 

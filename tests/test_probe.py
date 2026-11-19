@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from mediafilter.core.probe import MediaMetadata, parse_probe_json, ProbeError
+from mediafilter.core.probe import parse_probe_json, ProbeError
 
 VIDEO_JSON = {
     "streams": [
@@ -42,3 +42,16 @@ def test_zero_defaults_on_missing_fields():
 def test_invalid_json_raises():
     with pytest.raises(ProbeError):
         parse_probe_json("not json")
+
+
+def test_portable_dirs_only_when_frozen(monkeypatch, tmp_path):
+    import mediafilter.core.probe as probe
+
+    monkeypatch.delattr(probe.sys, "frozen", raising=False)
+    assert probe._portable_dirs() == []
+
+    monkeypatch.setattr(probe.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(probe.sys, "executable", str(tmp_path / "MediaFilter.exe"))
+    dirs = probe._portable_dirs()
+    assert tmp_path in dirs
+    assert tmp_path / "ffmpeg" / "bin" in dirs
