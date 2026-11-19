@@ -145,7 +145,9 @@ def assemble(version: str) -> Path:
 
 
 def make_zip(folder: Path) -> Path:
-    archive = folder.with_suffix(".zip")
+    # ``folder.name`` ends in "-win64", which Path.with_suffix would treat as
+    # a suffix and truncate ("MediaFilter-0.1.zip"). Append explicitly.
+    archive = folder.parent / (folder.name + ".zip")
     if archive.exists():
         archive.unlink()
     files = sorted(p for p in folder.rglob("*") if p.is_file())
