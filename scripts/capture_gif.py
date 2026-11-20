@@ -3,10 +3,10 @@
 Usage:
     .venv/Scripts/python.exe scripts/capture_gif.py <demo-folder> <out.gif>
 
-Grabs a short, honest sequence: empty state -> scanning -> scanned -> AI
-tagging -> tagged -> filtered by tag -> batch command dialog. The frames are
-captured with QWidget.grab() from the real MainWindow (isolated config/cache),
-then assembled into an optimised GIF with Pillow.
+Grabs a short, honest sequence: scanned table -> AI-tagged table -> filtered by
+tag -> batch command dialog. The frames are captured with QWidget.grab() from
+the real MainWindow (isolated config/cache), then assembled into an optimised
+GIF with Pillow.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from mediafilter.ui.theme import apply_theme
 from mediafilter.ui.widgets.batch_dialog import BatchCommandDialog
 
 FRAMES_DIR = Path(tempfile.mkdtemp(prefix="mediafilter-gif-frames-"))
-DURATIONS_MS = [1800, 1600, 1900, 1900, 2600]
+DURATIONS_MS = [1600, 1900, 1900, 2600]
 CANVAS = (1000, 625)
 
 
@@ -100,17 +100,17 @@ def main() -> None:
     window.resize(1440, 900)
     window.show()
     process_events(app, 0.6)
-    frames = [grab(window, 0)]
+    frames: list[Path] = []
 
     window.start_scan(str(folder))
     wait_until(app, lambda: window._worker is None)
     process_events(app, 0.3)
-    frames.append(grab(window, 1))
+    frames.append(grab(window, 0))
 
     window.start_tagging()
     wait_until(app, lambda: window._tag_worker is None, timeout=300)
     process_events(app, 0.4)
-    frames.append(grab(window, 2))
+    frames.append(grab(window, 1))
 
     # Filter by the most common tag so the table visibly narrows.
     counts: dict[str, int] = {}
@@ -121,7 +121,7 @@ def main() -> None:
     if tag:
         window._tag_combo.setCurrentText(tag)
         process_events(app, 0.5)
-    frames.append(grab(window, 3))
+    frames.append(grab(window, 2))
 
     if tag:
         window._tag_combo.setCurrentIndex(0)
@@ -140,7 +140,7 @@ def main() -> None:
     batch.resize(1100, 760)
     batch.show()
     process_events(app, 0.8)
-    frames.append(grab(batch, 4))
+    frames.append(grab(batch, 3))
     batch.close()
 
     window.close()
