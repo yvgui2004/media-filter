@@ -18,8 +18,6 @@ build/
 !packaging/*.spec
 release/
 *.log
+*.egg-info/
 Thumbs.db
 .DS_Store
-
-# local editor/type-checker config (absolute paths)
-pyrightconfig.json

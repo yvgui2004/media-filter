@@ -1,0 +1,66 @@
+name: Bug report
+description: Something crashed, misbehaved, or showed the wrong result.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please attach the log tail if the app misbehaved —
+        it usually answers most questions: `%LOCALAPPDATA%\media-filter-v2\mediafilter.log`.
+        API keys are masked in the log; check the text before pasting anyway.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: From the title bar, settings, or the release you downloaded.
+      placeholder: "0.1.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Recognition mode
+      options:
+        - Not using AI tagging
+        - Local (YOLOv8n)
+        - Hybrid (local + cloud)
+        - Cloud only
+        - Other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open folder ...
+        2. Click AI 识别 ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result / error message
+      description: Include the exact message and the log tail when possible.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Windows version and build
+      placeholder: "Windows 11 23H2 (22631.4169)"
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, sample file properties, whether the portable build or source install was used.

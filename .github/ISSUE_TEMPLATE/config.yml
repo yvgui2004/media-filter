@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or usage help
+    url: https://github.com/yvgui2004/media-filter/blob/master/使用文档.md
+    about: The Chinese usage guide covers scanning, tagging, batch commands, settings and troubleshooting.
+  - name: Security report
+    url: https://github.com/yvgui2004/media-filter/security/advisories/new
+    about: Please report vulnerabilities privately, not in a public issue.
