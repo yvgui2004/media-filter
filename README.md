@@ -59,7 +59,7 @@ Real screenshots from the running app (local AI, 14 demo files). / 截图直接�
 
 ## Download / 下载 — the fastest way to start / 最快的启用方式
 
-**English** — Grab the latest portable build from **[Releases](https://github.com/yvgui2004/media-filter/releases/latest)**, unzip it, and double-click `MediaFilter.exe`. Python, FFmpeg and the local AI model are all bundled — nothing else to install. This is the fastest way to get started; the source build below is only for development or customization.
+**English** — Grab the latest portable build from **[Releases](https://github.com/yvgui2004/media-filter/releases/latest)**, unzip it, and double-click `MediaFilter.exe`. Python, FFmpeg and the local AI model are all bundled — nothing else to install. You can also run `MediaFilter.exe "D:\footage"` to scan a folder immediately. This is the fastest way to get started; the source build below is only for development or customization.
 
 **中文** — 从 **[Releases](https://github.com/yvgui2004/media-filter/releases/latest)** 下载最新的便携包，解压后双击 `MediaFilter.exe` 即可使用。Python、FFmpeg 和本地 AI 模型都已内置，**不需要安装任何依赖，这是最快的启用方式**；下面的源码方式只用于开发或自行修改。
 
@@ -197,7 +197,7 @@ $env:MEDIAFILTER_FFMPEG_DIR = "C:\ffmpeg\bin"   # a folder with ffmpeg.exe + ffp
 .venv\Scripts\python.exe packaging\build.py
 ```
 
-Output: `release\MediaFilter-<version>-win64\` and the matching `.zip`, plus its SHA-256. The exe is onefile; FFmpeg is copied beside it so each launch does not unpack another ~180 MB. / 输出便携目录和同名 zip，附 SHA-256。exe 为单文件，FFmpeg 放在旁边，避免每次启动重复解压。
+Output: `release\MediaFilter-<version>-win64\` and the matching `.zip`, plus its SHA-256. The exe is onefile; FFmpeg is copied beside it so each launch does not unpack another ~180 MB. Use a **shared** FFmpeg build (exe + DLLs) rather than the static "full" build — the static one adds ~560 MB to the package. / 输出便携目录和同名 zip，附 SHA-256。exe 为单文件，FFmpeg 放在旁边，避免每次启动重复解压。请使用**共享库版** FFmpeg（exe + DLL），静态完整版会让包体多出约 560 MB。
 
 ### Tests and type checking / 测试与类型检查
 

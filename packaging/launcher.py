@@ -1,14 +1,14 @@
 """Entry point used by PyInstaller.
 
-``mediafilter/__main__.py`` uses a relative import, which only works under
-``python -m mediafilter``. A frozen app needs a top-level script instead.
+``mediafilter/__main__.py`` handles argparse (including the optional folder
+argument), so reuse its ``main`` instead of calling ``run()`` directly — the
+frozen exe then accepts ``MediaFilter.exe D:\\footage`` exactly like
+``python -m mediafilter D:\\footage``.
 """
 
 from __future__ import annotations
 
-import sys
-
-from mediafilter.app import run
+from mediafilter.__main__ import main
 
 if __name__ == "__main__":
-    sys.exit(run())
+    main()

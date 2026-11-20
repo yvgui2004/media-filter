@@ -4,7 +4,7 @@
   "homepage": "https://github.com/yvgui2004/media-filter",
   "license": "MIT",
   "url": "https://github.com/yvgui2004/media-filter/releases/download/v0.1.1/MediaFilter-0.1.1-win64.zip",
-  "hash": "fb0f93044da7076d61f364c32a05008bb6f9210ca7298d67d4489bfc4e5a11c8",
+  "hash": "0b7ba87ef9878f2bd20b512af92fdcc6949f4585551b01d1ca1eeb32e1cfd664",
   "extract_dir": "MediaFilter-0.1.1-win64",
   "bin": "MediaFilter.exe",
   "shortcuts": [

@@ -43,7 +43,8 @@ real FFmpeg build on Windows.
 
 - Rotating log at `%LOCALAPPDATA%\media-filter-v2\mediafilter.log` (1 MB × 3)
   plus hooks for uncaught exceptions in the main thread and in workers.
-- `python -m mediafilter [folder]` scans a folder on launch.
+- `python -m mediafilter [folder]` scans a folder on launch; the frozen
+  `MediaFilter.exe <folder>` does the same.
 - `docs/screenshots/` with light, dark, batch and settings captures and a demo
   GIF, generated from the real widgets by `scripts/capture_screenshots.py` and
   `scripts/capture_gif.py`.
