@@ -182,9 +182,23 @@ def submit(version: str, url: str, sha256: str, token: str) -> str:
     if status == 200 and pulls:
         return pulls[0]["html_url"]
 
+    status, _ = _request(
+        "GET", f"/repos/{UPSTREAM}/contents/manifests/{PACKAGE_ID[0].lower()}/{PUBLISHER}/MediaFilter", token
+    )
+    is_update = status == 200
+    title = (
+        f"Update: {PACKAGE_ID} to {version}"
+        if is_update
+        else f"New package: {PACKAGE_ID} version {version}"
+    )
+    intro = (
+        f"Update **Media Filter** to **{version}** (`{PACKAGE_ID}`)."
+        if is_update
+        else f"New package: **Media Filter {version}** (`{PACKAGE_ID}`)."
+    )
     body = f"""## 📖 Description
 
-New package: **Media Filter {version}** (`{PACKAGE_ID}`).
+{intro}
 
 Release: {url}
 
@@ -205,7 +219,7 @@ Release: {url}
         f"/repos/{UPSTREAM}/pulls",
         token,
         {
-            "title": f"New package: {PACKAGE_ID} version {version}",
+            "title": title,
             "head": f"{login}:{branch}",
             "base": "master",
             "body": body,

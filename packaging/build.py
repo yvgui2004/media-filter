@@ -170,7 +170,16 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _configure_console() -> None:
+    """GitHub runners default stdout to cp1252; the package contains a Chinese
+    ``使用说明.txt`` and printing its path must not crash the build."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> int:
+    _configure_console()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-build", action="store_true", help="reuse dist\\MediaFilter.exe")
     parser.add_argument("--no-zip", action="store_true", help="assemble the folder only")
