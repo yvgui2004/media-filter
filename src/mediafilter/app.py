@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFont, QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 from .config import Config
 from .i18n import Translator
+from .logging_setup import configure_logging
 from .ui.dialog_base import DialogChromeFilter, set_dialog_tokens
 from .ui.icons import brand_icon
 from .ui.main_window import MainWindow
@@ -19,7 +22,11 @@ from .ui.widgets.settings_dialog import wait_for_active_workers
 LOCALE_DIR = Path(__file__).parent / "i18n" / "locales"
 
 
-def run() -> int:
+def run(folder: str | None = None) -> int:
+    log_file = configure_logging()
+    logging.getLogger("mediafilter").info(
+        "starting folder=%s log=%s", folder or "", log_file
+    )
     app = QApplication(sys.argv)
     app.setApplicationName("Media Filter")
     app.setOrganizationName("mediafilter")
@@ -52,6 +59,8 @@ def run() -> int:
 
     window = MainWindow(translator, config)
     window.show()
+    if folder:
+        QTimer.singleShot(0, lambda: window.start_scan(folder))
     app.aboutToQuit.connect(wait_for_active_workers)
     return app.exec()
 
