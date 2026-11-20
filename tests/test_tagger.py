@@ -1,12 +1,18 @@
+# numpy comes from the optional [ai] extra; skip type checking the import so a
+# scan-only environment can still run pyright.
+# pyright: reportMissingImports=false
 import numpy as np
 
 from mediafilter.core.tagger import (
-    COCO_NAMES,
-    ZH_TAGS,
+    COCO_TO_TAG_ID,
+    LOCAL_TAG_IDS,
+    Detection,
     aggregate_tags,
     decode_yolo,
     frame_timestamps,
+    tally_detections,
 )
+from mediafilter.core.vocabulary import ALL_TAG_IDS
 
 
 def test_frame_timestamps_evenly_spaced_inside_duration():
@@ -28,9 +34,25 @@ def test_aggregate_tags_empty():
     assert aggregate_tags({}, 3) == []
 
 
-def test_every_coco_class_has_a_chinese_tag():
-    missing = [name for name in COCO_NAMES if name not in ZH_TAGS]
-    assert missing == []
+def test_local_mapping_only_uses_builtin_tag_ids():
+    assert set(COCO_TO_TAG_ID.values()) <= set(ALL_TAG_IDS)
+    assert LOCAL_TAG_IDS == frozenset(COCO_TO_TAG_ID.values())
+    assert COCO_TO_TAG_ID["person"] == "person"
+    assert COCO_TO_TAG_ID["dog"] == "dog"
+    assert COCO_TO_TAG_ID["pizza"] == "food"
+
+
+def test_tally_detections_respects_enabled_tags():
+    detections = [
+        Detection(0, "person", 0.9, (0, 0, 10, 10)),
+        Detection(16, "dog", 0.8, (0, 0, 10, 10)),
+        Detection(2, "car", 0.7, (0, 0, 10, 10)),
+        Detection(45, "bowl", 0.6, (0, 0, 10, 10)),
+        Detection(14, "bird", 0.5, (0, 0, 10, 10)),
+    ]
+    assert tally_detections(detections) == {"人": 1, "狗": 1, "车": 1, "食物": 1}
+    assert tally_detections(detections, {"person", "dog"}) == {"人": 1, "狗": 1}
+    assert tally_detections(detections, set()) == {}
 
 
 def test_decode_yolo_reads_box_and_class():

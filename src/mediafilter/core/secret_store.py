@@ -73,7 +73,7 @@ def _crypt(data: bytes, protect: bool) -> bytes:
         ctypes.cast(buffer, ctypes.POINTER(ctypes.c_char)),
     )
     out_blob = _DataBlob()
-    description = "media-filter-ai" if protect else None
+    description = "mediafilter" if protect else None
 
     crypt32.CryptProtectData.argtypes = [
         ctypes.POINTER(_DataBlob),

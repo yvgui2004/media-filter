@@ -212,4 +212,7 @@ class FileRecordModel(QAbstractTableModel):
             self.beginRemoveRows(QModelIndex(), row, row)
             self._records.pop(row)
             self.endRemoveRows()
+        # Paths to rows moved after a deletion; keep update_tags() pointed at
+        # the right file instead of the row index it had before the pop.
+        self._row_by_path = {str(r.path): i for i, r in enumerate(self._records)}
         self.checkedChanged.emit()

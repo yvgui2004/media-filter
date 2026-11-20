@@ -351,13 +351,13 @@ def probe_vision(
         "temperature": 0,
         "stream": False,
     }
-    if _needs_reasoning_none(base_url, model):
+    if _needs_reasoning_none(model):
         payload["reasoning_effort"] = "none"
 
     last_error: CloudModelError | None = None
     for url in chat_urls(base_url):
         try:
-            response = _request_json(url, api_key, payload=payload, timeout=timeout)
+            response = _chat_request(url, api_key, payload, timeout)
         except CloudModelError as exc:
             if exc.status == 404:
                 last_error = exc
@@ -377,9 +377,31 @@ def probe_vision(
     raise CloudModelError("请填写 BASE URL")
 
 
-def _needs_reasoning_none(base_url: str, model: str) -> bool:
-    lowered = model.lower()
-    return "deepseek" in lowered or "127.0.0.1:3425" in base_url
+def _needs_reasoning_none(model: str) -> bool:
+    # DeepSeek returns analysis text mixed with the answer unless reasoning is
+    # disabled; do not special-case any particular gateway host.
+    return "deepseek" in model.lower()
+
+
+def _chat_request(
+    url: str,
+    api_key: str,
+    payload: dict,
+    timeout: float,
+) -> object:
+    """POST a chat payload, retrying without reasoning_effort when rejected."""
+    try:
+        return _request_json(url, api_key, payload=payload, timeout=timeout)
+    except CloudModelError as exc:
+        if "reasoning_effort" in payload and _reasoning_rejected(exc):
+            retry = dict(payload)
+            retry.pop("reasoning_effort", None)
+            return _request_json(url, api_key, payload=retry, timeout=timeout)
+        raise
+
+
+def _reasoning_rejected(exc: CloudModelError) -> bool:
+    return exc.status == 400 and "reasoning" in str(exc).lower()
 
 
 def chat_completion(
@@ -404,13 +426,13 @@ def chat_completion(
         "temperature": 0,
         "stream": False,
     }
-    if _needs_reasoning_none(base_url, model):
+    if _needs_reasoning_none(model):
         payload["reasoning_effort"] = "none"
 
     last_error: CloudModelError | None = None
     for url in chat_urls(base_url):
         try:
-            response = _request_json(url, api_key, payload=payload, timeout=timeout)
+            response = _chat_request(url, api_key, payload, timeout)
         except CloudModelError as exc:
             if exc.status == 404:
                 last_error = exc

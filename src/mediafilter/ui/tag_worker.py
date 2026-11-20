@@ -22,6 +22,7 @@ class TagWorker(QThread):
     def __init__(self, records, model_path: str | Path, ffmpeg_path: str,
                  sample_frames: int = 3, threads: int = 2, conf: float = 0.25,
                  frame_policy: str | None = None,
+                 enabled_tags: list[str] | None = None,
                  cache_path: str | Path | None = None, parent=None):
         super().__init__(parent)
         self._records = list(records)
@@ -31,6 +32,7 @@ class TagWorker(QThread):
         self._policy = normalize_policy(frame_policy)
         self._threads = max(1, threads)
         self._conf = conf
+        self._enabled = set(enabled_tags) if enabled_tags is not None else None
         self._cache = TagCache(cache_path)
         self._cancel = threading.Event()
 
@@ -40,10 +42,14 @@ class TagWorker(QThread):
     def run(self) -> None:
         total = len(self._records)
         done = tagged_ok = failed = 0
-        model_id = f"{self._model_path.name}:{self._model_path.stat().st_size}"
-        if self._policy is not None:
-            model_id += f"|frames:{self._policy}"
         try:
+            if not self._model_path.is_file():
+                raise FileNotFoundError(f"model not found: {self._model_path}")
+            model_id = f"{self._model_path.name}:{self._model_path.stat().st_size}"
+            if self._policy is not None:
+                model_id += f"|frames:{self._policy}"
+            if self._enabled is not None:
+                model_id += "|tags:" + ",".join(sorted(self._enabled))
             pending = []
             for rec in self._records:
                 if self._cancel.is_set():
@@ -100,4 +106,5 @@ class TagWorker(QThread):
         return tag_media(
             detector, self._ffmpeg, rec.path, rec.duration,
             sample_count=count, cancel_event=self._cancel,
+            enabled_tags=self._enabled,
         )

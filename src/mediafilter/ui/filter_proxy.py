@@ -19,17 +19,34 @@ class FilterProxyModel(QSortFilterProxyModel):
 
     def set_formats(self, formats: set[str]) -> None:
         """Empty set means 'all formats'."""
+        self._begin_change()
         self._formats = set(formats)
-        self.invalidateFilter()
+        self._end_change()
 
     def set_tags(self, tags: set[str]) -> None:
         """Empty set means 'any tag'. Matches files carrying any selected tag."""
+        self._begin_change()
         self._tags = set(tags)
-        self.invalidateFilter()
+        self._end_change()
 
     def set_search(self, text: str) -> None:
+        self._begin_change()
         self._search = (text or "").strip()
-        self.invalidateFilter()
+        self._end_change()
+
+    def _begin_change(self) -> None:
+        # Qt 6.10 deprecates invalidateFilter(); begin/endFilterChange is the
+        # replacement, but the project still supports PySide6 6.6.
+        begin = getattr(self, "beginFilterChange", None)
+        if begin is not None:
+            begin()
+
+    def _end_change(self) -> None:
+        end = getattr(self, "endFilterChange", None)
+        if end is not None:
+            end(QSortFilterProxyModel.Direction.Rows)
+        else:
+            self.invalidateFilter()
 
     def filterAcceptsRow(self, source_row, source_parent) -> bool:
         model = self.sourceModel()

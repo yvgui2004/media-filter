@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
@@ -92,6 +93,8 @@ _COLUMN_WIDTHS = {
 }
 
 _RESIZE_BORDER = 6
+
+logger = logging.getLogger(__name__)
 
 # WM_NCHITTEST results.
 _HTLEFT, _HTRIGHT, _HTTOP, _HTBOTTOM = 10, 11, 12, 15
@@ -1192,6 +1195,7 @@ class MainWindow(QMainWindow):
         self._rebuild_tag_combo()
         self._apply_sort()
         errors = sum(1 for r in records if r.error)
+        logger.info("scan finished: files=%d errors=%d", len(records), errors)
         self._set_status(self._tr("status.done", files=len(records), errors=errors))
         self._sync_empty_state()
 
@@ -1204,9 +1208,11 @@ class MainWindow(QMainWindow):
             self._rebuild_tag_combo()
             self._apply_sort()
         self._set_status(self._tr("status.cancelled"))
+        logger.info("scan cancelled: partial=%d", len(records))
         self._sync_empty_state()
 
     def _on_scan_failed(self, message: str) -> None:
+        logger.error("scan failed: %s", message)
         self._finish_scan()
         self._set_status(message)
         self._sync_empty_state()
@@ -1226,7 +1232,9 @@ class MainWindow(QMainWindow):
             targets = self._model.records()
         return [
             r for r in targets
-            if r.extension in VIDEO_EXTENSIONS or r.video_bitrate > 0
+            # has_video is authoritative; the extension fallback keeps files
+            # whose metadata could not be read from silently disappearing.
+            if r.has_video or (r.metadata is None and r.extension in VIDEO_EXTENSIONS)
         ]
 
     def _on_mode_changed(self, mode: str) -> None:
@@ -1365,6 +1373,10 @@ class MainWindow(QMainWindow):
             custom_labels=list(self._config.custom_labels),
             sample_frames=self._config.ai_sample_frames,
             frame_policy=self._config.frame_policy,
+            enabled_tags=[
+                tag_id for tag_id in (self._config.tag_palette or list(DEFAULT_ENABLED))
+                if tag_id in ALL_TAG_IDS
+            ],
             threads=self._config.ai_threads,
             local_model_path=local_model,
             upload_target_only=self._config.upload_target_only,
@@ -1418,6 +1430,10 @@ class MainWindow(QMainWindow):
             frame_policy=self._config.frame_policy,
             threads=self._config.ai_threads,
             conf=self._config.ai_conf,
+            enabled_tags=[
+                tag_id for tag_id in (self._config.tag_palette or list(DEFAULT_ENABLED))
+                if tag_id in ALL_TAG_IDS
+            ],
             parent=self,
         )
         self._start_tag_worker(self._tag_worker)
@@ -1431,6 +1447,7 @@ class MainWindow(QMainWindow):
         self._set_status(self._tr("status.ai_scanning", done=done, total=total))
 
     def _on_tag_done(self, total: int, tagged_ok: int, failed: int) -> None:
+        logger.info("tagging finished: total=%d ok=%d failed=%d", total, tagged_ok, failed)
         self._tag_worker = None
         self._hide_progress()
         self._rebuild_tag_combo()
@@ -1438,6 +1455,7 @@ class MainWindow(QMainWindow):
         self._update_ai_button()
 
     def _on_tag_failed(self, message: str) -> None:
+        logger.error("tagging failed: %s", message)
         self._tag_worker = None
         self._hide_progress()
         self._update_ai_button()
@@ -1766,19 +1784,26 @@ class MainWindow(QMainWindow):
         records = [self._model.record(r) for r in rows]
         try:
             from send2trash import send2trash
-            trash = send2trash
         except ImportError:
-            trash = os.remove
+            message_box(
+                self, "critical", self._tr("app.title"),
+                self._tr("msg.trash_missing"),
+            )
+            return
         failed = 0
-        for rec in records:
+        deleted: list[int] = []
+        for row, rec in zip(rows, records):
             try:
-                trash(str(rec.path))
-            except Exception:
+                send2trash(str(rec.path))
+                deleted.append(row)
+            except Exception as exc:
                 failed += 1
-        self._model.remove_rows(rows)
+                logger.warning("delete failed for %s: %s", rec.path, exc)
+        if deleted:
+            self._model.remove_rows(deleted)
         self._refresh_stats()
         self._sync_empty_state()
-        self._set_status(self._tr("status.deleted", n=n - failed, failed=failed))
+        self._set_status(self._tr("status.deleted", n=len(deleted), failed=failed))
 
     # -- window behaviour ------------------------------------------------
 
@@ -1955,18 +1980,32 @@ class MainWindow(QMainWindow):
     # -- shutdown --------------------------------------------------------
 
     def closeEvent(self, event) -> None:
-        if self._worker is not None and self._worker.isRunning():
-            self._worker.cancel()
-            self._worker.wait(3000)
-        if self._tag_worker is not None and self._tag_worker.isRunning():
-            self._tag_worker.cancel()
-            self._tag_worker.wait(3000)
+        self._stop_worker(self._worker, "scan")
+        self._stop_worker(self._tag_worker, "tagging")
         g = self.normalGeometry() if self.isMaximized() else self.geometry()
         if g.width() > 200 and g.height() > 200:
             self._config.window_geometry = f"{g.x()},{g.y()},{g.width()},{g.height()}"
         self._config.window_maximized = self.isMaximized()
         self._config.save()
         super().closeEvent(event)
+
+    @staticmethod
+    def _stop_worker(worker, label: str) -> None:
+        """Cancel a running scan/tag thread and make sure it is gone.
+
+        QThread objects are owned by the window. Closing while one is still
+        running makes Qt abort with "Destroyed while thread is still running",
+        so fall back to terminate() when a cooperative cancel does not finish
+        in time (ffprobe can sit on a 120 s timeout).
+        """
+        if worker is None or not worker.isRunning():
+            return
+        worker.cancel()
+        if worker.wait(1500):
+            return
+        logger.warning("%s worker did not stop in 1.5 s; terminating", label)
+        worker.terminate()
+        worker.wait(3000)
 
 
 def _theme_key(mode: str) -> str:

@@ -68,7 +68,6 @@ def test_config_defaults_for_recognition():
     assert cfg.tag_palette == []
     assert cfg.frame_policy == "auto"
     assert cfg.upload_target_only is True
-    assert cfg.local_color_tags is True
     assert cfg.first_run_done is False
     assert cfg.first_run_prompted is False
     assert cfg.guide_dismissed is False

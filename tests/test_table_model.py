@@ -84,3 +84,18 @@ def test_update_tags_records_error_for_tooltip():
     model.update_tags(str(rec.path), [], "no frames decoded")
     assert rec.ai_error == "no frames decoded"
     assert model.data(model.index(0, FileRecordModel.COL_TAGS), Qt.ToolTipRole) == "no frames decoded"
+
+
+def test_remove_rows_keeps_tag_lookup_pointing_at_the_right_file():
+    model = FileRecordModel()
+    a, b, c = _rec("a.mp4"), _rec("b.mp4"), _rec("c.mp4")
+    model.set_records([a, b, c])
+
+    model.remove_rows([0])
+
+    assert model.records() == [b, c]
+    # b and c moved up one row; tagging must follow the path, not the old index.
+    assert model.update_tags(str(c.path), ["狗"]) is True
+    assert c.tags == ["狗"]
+    assert b.tags == []
+    assert model.update_tags(str(a.path), ["猫"]) is False

@@ -162,3 +162,25 @@ def test_secret_store_roundtrip_and_invalid_ciphertext():
     assert secret_store.key_hint("sk-test-1234") == "1234"
     with pytest.raises(secret_store.SecretStoreError):
         secret_store.unprotect("not-base64")
+
+
+def test_chat_completion_retries_without_a_rejected_reasoning_field(monkeypatch):
+    payloads: list[dict] = []
+
+    def fake_request(url, api_key, payload=None, timeout=12.0):
+        payloads.append(dict(payload or {}))
+        if "reasoning_effort" in (payload or {}):
+            raise cloud_models.CloudModelError(
+                "HTTP 400：unknown field reasoning_effort", status=400,
+            )
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setattr(cloud_models, "_request_json", fake_request)
+
+    answer = cloud_models.chat_completion(
+        "https://api.example.com/v1", "k", "deepseek-chat", [],
+    )
+
+    assert answer == "ok"
+    assert payloads[0]["reasoning_effort"] == "none"
+    assert "reasoning_effort" not in payloads[-1]

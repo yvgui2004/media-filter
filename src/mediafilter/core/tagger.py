@@ -6,7 +6,9 @@ is not installed.
 """
 
 # numpy is imported defensively below; type checkers treat the fallback as None.
-# pyright: reportOptionalMemberAccess=false, reportInvalidTypeForm=false
+# The AI extras are optional, so missing numpy/cv2/onnxruntime must not fail the
+# type check for a scan-only install.
+# pyright: reportOptionalMemberAccess=false, reportInvalidTypeForm=false, reportMissingImports=false
 
 from __future__ import annotations
 
@@ -21,6 +23,8 @@ try:  # optional: the app must still start for users who never use AI tagging
     import numpy as np
 except ImportError:  # pragma: no cover - exercised only on minimal installs
     np = None
+
+from .vocabulary import TAG_FALLBACK_NAMES
 
 INPUT_SIZE = 640
 PAD_COLOR = 0x727272          # letterbox fill, matches Ultralytics' 114 grey
@@ -41,29 +45,54 @@ COCO_NAMES = [
     "toothbrush",
 ]
 
-# English class -> short Chinese tag. Grouped where it helps filtering.
-ZH_TAGS = {
-    "person": "人物", "bicycle": "自行车", "car": "汽车", "motorcycle": "摩托车",
-    "airplane": "飞机", "bus": "公交车", "train": "火车", "truck": "卡车", "boat": "船",
-    "traffic light": "红绿灯", "fire hydrant": "消防栓", "stop sign": "停车标志",
-    "parking meter": "停车计时器", "bench": "长椅", "bird": "鸟", "cat": "猫", "dog": "狗",
-    "horse": "马", "sheep": "羊", "cow": "牛", "elephant": "大象", "bear": "熊",
-    "zebra": "斑马", "giraffe": "长颈鹿", "backpack": "背包", "umbrella": "雨伞",
-    "handbag": "手提包", "tie": "领带", "suitcase": "行李箱", "frisbee": "飞盘",
-    "skis": "滑雪板", "snowboard": "单板", "sports ball": "球", "kite": "风筝",
-    "baseball bat": "球棒", "baseball glove": "手套", "skateboard": "滑板",
-    "surfboard": "冲浪板", "tennis racket": "球拍", "bottle": "瓶子", "wine glass": "酒杯",
-    "cup": "杯子", "fork": "叉子", "knife": "刀", "spoon": "勺子", "bowl": "碗",
-    "banana": "香蕉", "apple": "苹果", "sandwich": "三明治", "orange": "橙子",
-    "broccoli": "西兰花", "carrot": "胡萝卜", "hot dog": "热狗", "pizza": "披萨",
-    "donut": "甜甜圈", "cake": "蛋糕", "chair": "椅子", "couch": "沙发",
-    "potted plant": "盆栽", "bed": "床", "dining table": "桌子", "toilet": "马桶",
-    "tv": "屏幕", "laptop": "电脑", "mouse": "鼠标", "remote": "遥控器",
-    "keyboard": "键盘", "cell phone": "手机", "microwave": "微波炉", "oven": "烤箱",
-    "toaster": "烤面包机", "sink": "水槽", "refrigerator": "冰箱", "book": "书",
-    "clock": "时钟", "vase": "花瓶", "scissors": "剪刀", "teddy bear": "玩偶",
-    "hair drier": "吹风机", "toothbrush": "牙刷",
+# COCO class -> built-in tag id. Only classes the local model can actually
+# recognise are mapped; scene / shot-size / technical tags are cloud-only.
+COCO_TO_TAG_ID = {
+    "person": "person",
+    "tv": "screen",
+    "laptop": "computer",
+    "cell phone": "phone",
+    "cat": "cat",
+    "dog": "dog",
+    "car": "car",
+    "bus": "car",
+    "truck": "car",
+    "bicycle": "car",
+    "motorcycle": "car",
+    "pizza": "food",
+    "banana": "food",
+    "sandwich": "food",
+    "orange": "food",
+    "broccoli": "food",
+    "carrot": "food",
+    "hot dog": "food",
+    "donut": "food",
+    "cake": "food",
+    "bowl": "food",
 }
+
+LOCAL_TAG_IDS = frozenset(COCO_TO_TAG_ID.values())
+
+def tally_detections(
+    detections: list[Detection],
+    enabled_tags: set[str] | None = None,
+) -> dict[str, int]:
+    """Count COCO detections as the app's built-in tag labels.
+
+    The local model can only see a subset of the built-in vocabulary; scene,
+    shot-size and technical tags need the cloud model. ``enabled_tags`` is the
+    list of tag ids the user kept in Settings -- detections outside it are
+    dropped so local results obey the same palette as cloud results.
+    """
+    allowed = LOCAL_TAG_IDS if enabled_tags is None else set(enabled_tags)
+    votes: dict[str, int] = {}
+    for det in detections:
+        tag_id = COCO_TO_TAG_ID.get(det.name)
+        if tag_id is None or tag_id not in allowed:
+            continue
+        label = TAG_FALLBACK_NAMES.get(tag_id, tag_id)
+        votes[label] = votes.get(label, 0) + 1
+    return votes
 
 
 @dataclass
@@ -211,8 +240,9 @@ def tag_media(
     duration: float,
     sample_count: int = 3,
     cancel_event: threading.Event | None = None,
+    enabled_tags: set[str] | None = None,
 ) -> TagResult:
-    """Sample frames from a video and return stable Chinese tags."""
+    """Sample frames from a video and return stable built-in tag labels."""
     frames = []
     for ts in frame_timestamps(duration, sample_count):
         if cancel_event is not None and cancel_event.is_set():
@@ -226,11 +256,12 @@ def tag_media(
     votes: dict[str, int] = {}
     total_det = 0
     for frame in frames:
-        for det in detector.detect(frame):
-            zh = ZH_TAGS.get(det.name, det.name)
-            votes[zh] = votes.get(zh, 0) + 1
-            total_det += 1
+        frame_votes = tally_detections(detector.detect(frame), enabled_tags)
+        total_det += sum(frame_votes.values())
+        for label, count in frame_votes.items():
+            votes[label] = votes.get(label, 0) + count
     return TagResult(tags=aggregate_tags(votes, len(frames)), frames=len(frames), detections=total_det)
+
 
 def find_model(configured: str | None = None) -> Path | None:
     """Resolve the ONNX model: configured path, then <project>/models/*.onnx."""

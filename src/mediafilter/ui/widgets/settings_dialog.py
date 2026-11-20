@@ -1147,8 +1147,8 @@ class SettingsDialog(AppDialog):
 
         checks = QFrame()
         checks.setObjectName("AdvPanel")
-        checks.setMinimumHeight(_scaled(170))
-        checks.setMaximumHeight(_scaled(188))
+        checks.setMinimumHeight(_scaled(104))
+        checks.setMaximumHeight(_scaled(118))
         checks_box = QVBoxLayout(checks)
         checks_box.setContentsMargins(
             _scaled(11), _scaled(10), _scaled(11), _scaled(10)
@@ -1160,13 +1160,6 @@ class SettingsDialog(AppDialog):
         self._upload_only.setChecked(self._config.upload_target_only)
         checks_box.addWidget(self._upload_only)
         checks_box.addWidget(self._hint(self._tr("settings.upload_only_hint")))
-        checks_box.addSpacing(_scaled(4))
-        self._color_local = CheckRow(
-            self._tr("settings.color_local"), self._tokens, compact=True,
-        )
-        self._color_local.setChecked(self._config.local_color_tags)
-        checks_box.addWidget(self._color_local)
-        checks_box.addWidget(self._hint(self._tr("settings.color_local_hint")))
         columns.addWidget(checks, 1)
         box.addLayout(columns, 0)
 
@@ -1179,10 +1172,6 @@ class SettingsDialog(AppDialog):
         facts.addWidget(card, 1)
         card, self._adv_fact_upload, _detail = self._fact_card(
             self._tr("settings.adv_fact_upload")
-        )
-        facts.addWidget(card, 1)
-        card, self._adv_fact_color, _detail = self._fact_card(
-            self._tr("settings.adv_fact_color")
         )
         facts.addWidget(card, 1)
         box.addLayout(facts)
@@ -1535,11 +1524,6 @@ class SettingsDialog(AppDialog):
         panel.addWidget(self._upload_only)
         panel.addWidget(self._hint(tr("settings.upload_only_hint")))
 
-        self._color_local = CheckRow(tr("settings.color_local"), self._tokens)
-        self._color_local.setChecked(self._config.local_color_tags)
-        panel.addWidget(self._color_local)
-        panel.addWidget(self._hint(tr("settings.color_local_hint")))
-
         self._adv_panel.setVisible(_ADVANCED_OPEN)
         body.addWidget(self._adv_panel)
         self._sync_adv_head()
@@ -1615,7 +1599,6 @@ class SettingsDialog(AppDialog):
         if self._model_status.action is not None:
             self._model_status.action.clicked.connect(self._model_action)
         self._upload_only.toggled.connect(lambda _checked: self._update_advanced_facts())
-        self._color_local.toggled.connect(lambda _checked: self._update_advanced_facts())
         self._update_save()
         self._refresh_mode_state()
 
@@ -1811,10 +1794,6 @@ class SettingsDialog(AppDialog):
         )
         self._adv_fact_upload.setText(
             self._tr("settings.on") if self._upload_only.isChecked()
-            else self._tr("settings.off")
-        )
-        self._adv_fact_color.setText(
-            self._tr("settings.on") if self._color_local.isChecked()
             else self._tr("settings.off")
         )
 
@@ -2197,7 +2176,6 @@ class SettingsDialog(AppDialog):
         self._segment.set_policy("auto")
         self._on_frame_policy_changed("auto")
         self._upload_only.setChecked(True)
-        self._color_local.setChecked(True)
         self._refresh_mode_state()
         self._show_tab("mode")
         self._update_save()
@@ -2280,7 +2258,6 @@ class SettingsDialog(AppDialog):
         self._config.custom_labels = list(self._custom_labels)
         self._config.frame_policy = self._segment.policy()
         self._config.upload_target_only = self._upload_only.isChecked()
-        self._config.local_color_tags = self._color_local.isChecked()
         self._config.first_run_done = True
         self._config.first_run_prompted = True
         self._config.guide_dismissed = True

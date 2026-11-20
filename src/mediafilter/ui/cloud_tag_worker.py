@@ -41,6 +41,7 @@ class CloudTagWorker(QThread):
         local_model_path: str | Path | None = None,
         upload_target_only: bool = True,
         frame_policy: str | None = None,
+        enabled_tags: list[str] | None = None,
         cache_path: str | Path | None = None,
         parent=None,
     ) -> None:
@@ -53,6 +54,7 @@ class CloudTagWorker(QThread):
         self._sample = max(1, sample_frames)
         self._policy = normalize_policy(frame_policy)
         self._threads = max(1, threads)
+        self._enabled = set(enabled_tags) if enabled_tags is not None else None
         self._local_model = Path(local_model_path) if local_model_path else None
         self._upload_target_only = upload_target_only
         self._cache = TagCache(cache_path)
@@ -73,6 +75,8 @@ class CloudTagWorker(QThread):
                 model_id += f"|{self._local_model.name}:{self._local_model.stat().st_size}"
             if self._policy is not None:
                 model_id += f"|frames:{self._policy}"
+            if self._enabled is not None:
+                model_id += "|tags:" + ",".join(sorted(self._enabled))
             detector = None
             if self._mode == "hybrid":
                 if self._local_model is None or not self._local_model.is_file():
@@ -140,6 +144,7 @@ class CloudTagWorker(QThread):
             local = tag_media(
                 detector, self._ffmpeg, rec.path, rec.duration,
                 sample_count=count, cancel_event=self._cancel,
+                enabled_tags=self._enabled,
             )
             if local.error:
                 return local

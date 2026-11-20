@@ -41,3 +41,34 @@ def test_local_worker_samples_each_video_by_policy(qt_app, tmp_path, monkeypatch
     worker._tag_one(cast(Any, object()), long)
 
     assert counts == [12, 16]
+
+
+def test_local_worker_passes_the_enabled_palette(qt_app, tmp_path, monkeypatch):
+    seen: list[set[str] | None] = []
+
+    def fake_tag(*_args, **kwargs):
+        seen.append(kwargs["enabled_tags"])
+        return TagResult()
+
+    monkeypatch.setattr(worker_module, "tag_media", fake_tag)
+    worker = TagWorker(
+        [], tmp_path / "model.onnx", "ffmpeg",
+        enabled_tags=["person", "dog"], cache_path=tmp_path / "tags.json",
+    )
+    short = SimpleNamespace(path="a.mp4", duration=30.0, mtime=1.0, size=10)
+    worker._tag_one(cast(Any, object()), short)
+
+    assert seen == [{"person", "dog"}]
+
+
+def test_missing_model_reports_failure_instead_of_raising(qt_app, tmp_path):
+    worker = TagWorker(
+        [], tmp_path / "missing.onnx", "ffmpeg",
+        cache_path=tmp_path / "tags.json",
+    )
+    errors: list[str] = []
+    worker.failed.connect(errors.append)
+
+    worker.run()
+
+    assert errors and "model not found" in errors[0]

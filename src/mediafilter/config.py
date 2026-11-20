@@ -43,7 +43,6 @@ class Config:
     tag_palette: list[str] = field(default_factory=list)    # enabled built-in tag ids
     frame_policy: str = "auto"           # auto | fast | fine
     upload_target_only: bool = True      # hybrid: only upload frames that may hit custom labels
-    local_color_tags: bool = True        # derive black/white/orange colours locally
     first_run_done: bool = False         # setup finished (saved at least once)
     first_run_prompted: bool = False     # the welcome dialog was shown once
     guide_dismissed: bool = False        # the non-blocking "finish setup" bar was closed
