@@ -7,6 +7,8 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 from .models import MediaMetadata
@@ -19,6 +21,10 @@ _WIN_PROBE_CANDIDATES = (
 
 class ProbeError(Exception):
     """Raised when metadata cannot be read from a file."""
+
+
+class ProbeCancelled(ProbeError):
+    """The scan was cancelled while ffprobe was running."""
 
 
 def _portable_dirs() -> list[Path]:
@@ -66,8 +72,18 @@ def find_ffmpeg(ffprobe_path: str | None = None) -> str | None:
     return None
 
 
-def probe_file(ffprobe_path: str | None, path: str | Path) -> MediaMetadata:
-    """Extract duration / video bitrate / audio bitrate from one media file."""
+def probe_file(
+    ffprobe_path: str | None,
+    path: str | Path,
+    cancel_event: threading.Event | None = None,
+    timeout: float = 120.0,
+) -> MediaMetadata:
+    """Extract duration / video bitrate / audio bitrate from one media file.
+
+    ``cancel_event`` is polled every 200 ms; when it is set the ffprobe process
+    is killed and :class:`ProbeCancelled` is raised, so cancelling a scan does
+    not wait for a slow network file to hit the timeout.
+    """
     if not ffprobe_path:
         raise ProbeError("ffprobe not found on PATH")
 
@@ -86,23 +102,59 @@ def probe_file(ffprobe_path: str | None, path: str | Path) -> MediaMetadata:
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore[attr-defined]
 
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             startupinfo=startupinfo,
-            timeout=120,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except OSError as exc:
         raise ProbeError(f"ffprobe launch failed: {exc}") from exc
 
-    if result.returncode != 0:
-        detail = (result.stderr or "").strip()
-        raise ProbeError(detail[:200] or f"exit code {result.returncode}")
+    deadline = time.monotonic() + timeout
+    while True:
+        # Do not use communicate(timeout=...) for polling on Windows: it starts
+        # reader threads that hold the pipe objects, and closing them after a
+        # cancel would wait for every child process to exit anyway.
+        if proc.poll() is not None:
+            stdout, stderr = proc.communicate()
+            break
+        if cancel_event is not None and cancel_event.is_set():
+            _kill(proc)
+            raise ProbeCancelled("scan cancelled") from None
+        if time.monotonic() >= deadline:
+            _kill(proc)
+            raise ProbeError("ffprobe timed out") from None
+        time.sleep(0.05)
 
-    return parse_probe_json(result.stdout)
+    if proc.returncode != 0:
+        detail = stderr.decode("utf-8", errors="replace").strip()
+        raise ProbeError(detail[:200] or f"exit code {proc.returncode}")
+
+    return parse_probe_json(stdout.decode("utf-8", errors="replace"))
+
+
+def _kill(proc: subprocess.Popen) -> None:
+    """Kill ffprobe and stop waiting on its pipes immediately.
+
+    Closing our read ends matters on Windows: killing a launcher (or a shell
+    wrapper in tests) can leave a child holding the pipe open, and
+    communicate() would then wait for that child to exit anyway.
+    """
+    try:
+        proc.kill()
+    except OSError:
+        pass
+    for stream in (proc.stdout, proc.stderr):
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def parse_probe_json(stdout: str) -> MediaMetadata:
@@ -122,23 +174,27 @@ def parse_probe_json(stdout: str) -> MediaMetadata:
 
     video_bitrate = 0
     audio_bitrate = 0
+    has_video = False
     for stream in data.get("streams", []):
         codec_type = stream.get("codec_type")
         rate = _to_int(stream.get("bit_rate"), 0)
-        if codec_type == "video" and rate > 0 and video_bitrate == 0:
-            video_bitrate = rate
+        if codec_type == "video":
+            has_video = True
+            if rate > 0 and video_bitrate == 0:
+                video_bitrate = rate
         elif codec_type == "audio" and rate > 0 and audio_bitrate == 0:
             audio_bitrate = rate
 
     # Some containers only carry a container-level bitrate; treat it as the
     # video rate minus any audio, best-effort.
-    if video_bitrate == 0 and format_bitrate > 0:
+    if has_video and video_bitrate == 0 and format_bitrate > 0:
         video_bitrate = max(0, format_bitrate - audio_bitrate) if audio_bitrate else format_bitrate
 
     return MediaMetadata(
         duration=duration,
         video_bitrate=video_bitrate,
         audio_bitrate=audio_bitrate,
+        has_video=has_video,
     )
 
 

@@ -38,9 +38,18 @@ def scan_and_probe(
     workers = max(1, min(max_workers, total, 32))
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        future_to_record = {pool.submit(probe_file, ffprobe_path, rec.path): rec for rec in records}
+        future_to_record = {
+            pool.submit(probe_file, ffprobe_path, rec.path, cancel_event): rec
+            for rec in records
+        }
         done = 0
         for future in as_completed(future_to_record):
+            if cancel_event.is_set():
+                # Running probes poll the same event and kill ffprobe within
+                # 200 ms, so leaving the pool block stays quick.
+                for pending in future_to_record:
+                    pending.cancel()
+                return records, True
             record = future_to_record[future]
             try:
                 record.metadata = future.result()
@@ -51,10 +60,6 @@ def scan_and_probe(
             done += 1
             if progress is not None:
                 progress(done, total)
-            if cancel_event.is_set():
-                for pending in future_to_record:
-                    pending.cancel()
-                return records, True
 
     return records, False
 

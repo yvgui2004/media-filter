@@ -13,6 +13,7 @@ class MediaMetadata:
     duration: float = 0.0          # seconds
     video_bitrate: int = 0         # bits per second
     audio_bitrate: int = 0         # bits per second
+    has_video: bool = False        # a real video stream was present
 
 
 @dataclass
@@ -37,6 +38,10 @@ class FileRecord:
     @property
     def video_bitrate(self) -> int:
         return self.metadata.video_bitrate if self.metadata else 0
+
+    @property
+    def has_video(self) -> bool:
+        return self.metadata.has_video if self.metadata else False
 
     @property
     def audio_bitrate(self) -> int:

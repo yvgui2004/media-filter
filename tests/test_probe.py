@@ -1,8 +1,11 @@
 import json
+import os
+import threading
+import time
 
 import pytest
 
-from mediafilter.core.probe import parse_probe_json, ProbeError
+from mediafilter.core.probe import ProbeCancelled, ProbeError, parse_probe_json, probe_file
 
 VIDEO_JSON = {
     "streams": [
@@ -17,6 +20,19 @@ def test_parses_video_and_audio_bitrates():
     meta = parse_probe_json(json.dumps(VIDEO_JSON))
     assert meta.duration == pytest.approx(3721.5)
     assert meta.video_bitrate == 2_500_000
+    assert meta.audio_bitrate == 128_000
+    assert meta.has_video is True
+
+
+def test_audio_only_is_not_mistaken_for_a_video():
+    data = {
+        "streams": [{"codec_type": "audio", "bit_rate": "128000"}],
+        "format": {"duration": "10.0", "bit_rate": "128500"},
+    }
+    meta = parse_probe_json(json.dumps(data))
+    assert meta.has_video is False
+    # The container-rate fallback must not invent a video stream for audio.
+    assert meta.video_bitrate == 0
     assert meta.audio_bitrate == 128_000
 
 
@@ -55,3 +71,17 @@ def test_portable_dirs_only_when_frozen(monkeypatch, tmp_path):
     dirs = probe._portable_dirs()
     assert tmp_path in dirs
     assert tmp_path / "ffmpeg" / "bin" in dirs
+
+
+@pytest.mark.skipif(os.name != "nt", reason="uses a .cmd wrapper")
+def test_cancel_kills_a_slow_ffprobe_quickly(tmp_path):
+    fake = tmp_path / "slow.cmd"
+    fake.write_text("@echo off\r\nping -n 6 127.0.0.1 >nul\r\n", encoding="ascii")
+    cancel = threading.Event()
+    threading.Timer(0.3, cancel.set).start()
+
+    started = time.monotonic()
+    with pytest.raises(ProbeCancelled):
+        probe_file(str(fake), "x.mp4", cancel_event=cancel)
+
+    assert time.monotonic() - started < 2.0
