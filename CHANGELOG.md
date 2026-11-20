@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Tag-triggered release workflow: pushing `v*` runs tests and pyright, downloads
+  the pinned FFmpeg and model inputs (SHA-256 verified), builds the portable
+  zip, publishes the Release with notes and a `.sha256` file, and optionally
+  opens the winget update PR. A manual dry run keeps the zip as an artifact.
+- The YOLOv8n ONNX weights are published as a pinned `model-v1` release asset so
+  CI builds are reproducible without committing binaries.
+
 ## [0.1.1] — 2026-11-20
 
 Reliability release: every fix below came from reproducing the issue against a

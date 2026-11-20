@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build only (do not publish a GitHub Release)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  # Pinned build inputs. Update these deliberately, together with the hashes.
+  FFMPEG_URL: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/autobuild-2026-11-19-12-39/ffmpeg-N-129130-gcd39c36377-win64-gpl-shared.zip
+  FFMPEG_SHA256: f22d9073befaeaffbf6b4dd51e3503a2eef0672a1549e3eeb8ba1b2f3b6d541d
+  MODEL_URL: https://github.com/yvgui2004/media-filter/releases/download/model-v1/yolov8n_fp32.onnx
+  MODEL_SHA256: 7af37313c6a804d8b4a15b5673de453ba9c3d787a7cc43b1960d839a1937288f
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      asset: ${{ steps.meta.outputs.asset }}
+      sha: ${{ steps.pkg.outputs.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Resolve version
+        id: meta
+        run: |
+          $match = Select-String -Path pyproject.toml -Pattern '^version = "([^"]+)"'
+          $version = $match.Matches[0].Groups[1].Value
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $tag = "${{ github.ref_name }}"
+            if ($tag -ne "v$version") {
+              throw "Tag $tag does not match pyproject.toml version $version"
+            }
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "asset=MediaFilter-$version-win64.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Create virtual environment
+        run: python -m venv .venv
+
+      - name: Install dependencies
+        run: |
+          .venv\Scripts\python.exe -m pip install --upgrade pip
+          .venv\Scripts\python.exe -m pip install -e ".[dev,ai]" "pyinstaller==6.22.3"
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: .venv\Scripts\python.exe -m pytest -q
+
+      - name: Type check
+        run: .venv\Scripts\python.exe -m pyright
+
+      - name: Download pinned FFmpeg
+        run: |
+          Invoke-WebRequest -Uri $env:FFMPEG_URL -OutFile ffmpeg.zip
+          $hash = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:FFMPEG_SHA256) { throw "FFmpeg checksum mismatch: $hash" }
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg-dl
+          $bin = Get-ChildItem ffmpeg-dl -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $bin) { throw "ffmpeg.exe not found in the archive" }
+          "MEDIAFILTER_FFMPEG_DIR=$($bin.Directory.FullName)" >> $env:GITHUB_ENV
+
+      - name: Download pinned model
+        run: |
+          New-Item -ItemType Directory -Force models | Out-Null
+          Invoke-WebRequest -Uri $env:MODEL_URL -OutFile models\yolov8n_fp32.onnx
+          $hash = (Get-FileHash models\yolov8n_fp32.onnx -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:MODEL_SHA256) { throw "Model checksum mismatch: $hash" }
+
+      - name: Build portable package
+        run: .venv\Scripts\python.exe packaging\build.py
+
+      - name: Hash and release notes
+        id: pkg
+        run: |
+          $version = "${{ steps.meta.outputs.version }}"
+          $asset = "${{ steps.meta.outputs.asset }}"
+          $zip = "release/$asset"
+          $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$sha  $asset" | Out-File -Encoding ascii "release/$asset.sha256"
+          .venv\Scripts\python.exe scripts\release_notes.py --version $version --asset $asset --sha256 $sha --out RELEASE_NOTES.md
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MediaFilter-${{ steps.meta.outputs.version }}-win64
+          path: |
+            release/MediaFilter-${{ steps.meta.outputs.version }}-win64.zip
+            release/MediaFilter-${{ steps.meta.outputs.version }}-win64.zip.sha256
+            RELEASE_NOTES.md
+          retention-days: 7
+
+  publish:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: MediaFilter-${{ needs.build.outputs.version }}-win64
+          path: dist-assets
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = "${{ needs.build.outputs.version }}"
+          $asset = "${{ needs.build.outputs.asset }}"
+          $zip = "dist-assets/$asset"
+          $sum = "dist-assets/$asset.sha256"
+          $notes = "dist-assets/RELEASE_NOTES.md"
+
+          gh release view $tag --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $zip $sum --clobber --repo $env:GITHUB_REPOSITORY
+            gh release edit $tag --title "Media Filter $version" --notes-file $notes --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release create $tag $zip $sum --title "Media Filter $version" --notes-file $notes --repo $env:GITHUB_REPOSITORY
+          }
+
+      - name: Update winget manifest
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          $version = "${{ needs.build.outputs.version }}"
+          $asset = "${{ needs.build.outputs.asset }}"
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/v$version/$asset"
+          python scripts/winget_submit.py --version $version --url $url --sha256 "${{ needs.build.outputs.sha }}"

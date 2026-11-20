@@ -199,6 +199,8 @@ $env:MEDIAFILTER_FFMPEG_DIR = "C:\ffmpeg\bin"   # a folder with ffmpeg.exe + ffp
 
 Output: `release\MediaFilter-<version>-win64\` and the matching `.zip`, plus its SHA-256. The exe is onefile; FFmpeg is copied beside it so each launch does not unpack another ~180 MB. Use a **shared** FFmpeg build (exe + DLLs) rather than the static "full" build — the static one adds ~560 MB to the package. / 输出便携目录和同名 zip，附 SHA-256。exe 为单文件，FFmpeg 放在旁边，避免每次启动重复解压。请使用**共享库版** FFmpeg（exe + DLL），静态完整版会让包体多出约 560 MB。
 
+Official releases are built by CI, not by hand: bump the version in `pyproject.toml`, add the matching `CHANGELOG.md` section, then push a tag (`git tag v0.1.2 && git push origin v0.1.2`). The workflow runs tests, downloads the pinned FFmpeg/model (SHA-256 checked), builds the zip, writes release notes and publishes the Release. See [packaging/README.md](packaging/README.md). / 正式版本由 CI 构建：改版本号、补 CHANGELOG、推一个 `v*` 标签即可，测试、构建、校验、发布和 winget PR 都自动完成。
+
 ### Tests and type checking / 测试与类型检查
 
 ```powershell
