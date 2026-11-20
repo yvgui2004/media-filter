@@ -6,6 +6,7 @@ from __future__ import annotations
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -44,8 +45,8 @@ class CommandRunner(QThread):
     process and stops before the next starts."""
 
     line = Signal(str)
-    finished = Signal(int)   # success count
-    aborted = Signal(int)    # count completed before cancel
+    finished = Signal(int, int)   # succeeded, failed
+    aborted = Signal(int, int)    # succeeded, failed before cancel
 
     def __init__(self, commands: list[str], parent=None):
         super().__init__(parent)
@@ -56,35 +57,81 @@ class CommandRunner(QThread):
         self._cancel = True
 
     def run(self) -> None:
-        completed = 0
+        succeeded = failed = 0
         for cmd in self._commands:
             if self._cancel:
                 break
             self.line.emit(f"> {cmd}")
-            try:
-                argv = shlex.split(cmd, posix=(sys.platform != "win32"))
-            except ValueError as exc:
-                self.line.emit(f"  [bad command: {exc}]")
-                continue
-            flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0  # type: ignore[attr-defined]
-            try:
-                proc = subprocess.Popen(
-                    argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    creationflags=flags,
-                )
-            except OSError as exc:
-                self.line.emit(f"  [launch failed: {exc}]")
-                continue
-            while proc.poll() is None:
-                if self._cancel:
-                    proc.terminate()
-                time.sleep(0.1)
-            completed += 1
-            self.line.emit(f"  [exit {proc.returncode}]")
+            code, detail, cancelled = self._run_one(cmd)
+            if cancelled:
+                break
+            if code == 0:
+                succeeded += 1
+                self.line.emit("  [exit 0]")
+            else:
+                failed += 1
+                if code is None:
+                    self.line.emit("  [launch failed]")
+                else:
+                    self.line.emit(f"  [exit {code}]")
+                for text in detail:
+                    self.line.emit(f"  {text}")
         if self._cancel:
-            self.aborted.emit(completed)
+            self.aborted.emit(succeeded, failed)
         else:
-            self.finished.emit(completed)
+            self.finished.emit(succeeded, failed)
+
+    def _run_one(self, cmd: str) -> tuple[int | None, list[str], bool]:
+        """Run one command; return (exit code, stderr tail, cancelled)."""
+        with tempfile.TemporaryFile() as err_file:
+            try:
+                proc = self._start(cmd, err_file)
+            except (OSError, ValueError) as exc:
+                self.line.emit(f"  [launch failed: {exc}]")
+                return None, [], False
+
+            stop_requested = False
+            while proc.poll() is None:
+                if self._cancel and not stop_requested:
+                    proc.terminate()
+                    stop_requested = True
+                time.sleep(0.1)
+
+            if stop_requested:
+                # Reap the process before returning so no console window lingers.
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=2)
+                return proc.returncode, [], True
+
+            err_file.seek(0)
+            raw = err_file.read(16_000)
+            detail = _stderr_tail(raw)
+            return proc.returncode, detail, False
+
+    @staticmethod
+    def _start(cmd: str, err_file):
+        kwargs = {"stdout": subprocess.DEVNULL, "stderr": err_file}
+        if sys.platform == "win32":
+            # A string is passed to CreateProcess verbatim on Windows, so the
+            # quotes around paths survive intact. shlex(posix=False) keeps the
+            # quote characters and makes ffmpeg look for a filename that
+            # literally starts with a quote -- every preset failed that way.
+            return subprocess.Popen(
+                cmd,
+                creationflags=subprocess.CREATE_NO_WINDOW,  # type: ignore[attr-defined]
+                **kwargs,
+            )
+        return subprocess.Popen(shlex.split(cmd, posix=True), **kwargs)
+
+
+def _stderr_tail(raw: bytes, limit: int = 8) -> list[str]:
+    """Last few non-empty stderr lines, safe to show in the log pane."""
+    text = raw.decode("utf-8", errors="replace")
+    lines = [" ".join(line.split()) for line in text.splitlines() if line.strip()]
+    return [line[:220] for line in lines[-limit:]]
 
 
 class BatchCommandDialog(AppDialog):
@@ -265,7 +312,7 @@ class BatchCommandDialog(AppDialog):
                                               "transcode.bat", "Batch (*.bat)")
         if not path:
             return
-        content = "@echo off\n" + "\n".join(commands) + "\npause\n"
+        content = "@echo off\n" + "\n".join(_for_batch_file(c) for c in commands) + "\npause\n"
         Path(path).write_text(content, encoding="gbk", errors="replace")
         message_box(self, "info", self._tr("dialog.save_bat"),
                                 self._tr("dialog.bat_saved", path=path))
@@ -283,15 +330,15 @@ class BatchCommandDialog(AppDialog):
         self._runner.start()
         self._run_btn.setText("…")
 
-    def _on_run_done(self, count):
+    def _on_run_done(self, ok: int, failed: int):
         self._run_btn.setEnabled(True)
         self._run_btn.setText(self._tr("dialog.run"))
-        self._log.append(f"[{self._tr('status.done', files=count, errors=0)}]")
+        self._log.append(f"[{self._tr('dialog.run_done', ok=ok, failed=failed)}]")
 
-    def _on_run_aborted(self, count):
+    def _on_run_aborted(self, ok: int, failed: int):
         self._run_btn.setEnabled(True)
         self._run_btn.setText(self._tr("dialog.run"))
-        self._log.append(f"[{self._tr('status.cancelled')} ({count})]")
+        self._log.append(f"[{self._tr('dialog.run_cancelled', ok=ok, failed=failed)}]")
 
     def reject(self):
         if self._runner and self._runner.isRunning():
@@ -304,3 +351,13 @@ def _display_format(tr, key: str) -> str:
     if key == "original":
         return tr("dialog.keep_original")
     return key.upper()
+
+
+def _for_batch_file(command: str) -> str:
+    """Escape a command for a double-clicked .bat file.
+
+    Paths are already quoted; ``%`` is the one character that still expands
+    inside quotes in cmd.exe. Doubling it keeps file names like ``100%.mp4``
+    intact.
+    """
+    return command.replace("%", "%%")

@@ -1,2 +1,0 @@
-[console_scripts]
-mediafilter = mediafilter.__main__:main
