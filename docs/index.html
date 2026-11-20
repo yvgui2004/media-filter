@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Media Filter — Local-first AI video organizer for Windows</title>
+  <meta name="description" content="Scan a folder, auto-tag video and audio with local YOLOv8 or a cloud model, filter by content, and turn selections into batch FFmpeg commands. Portable Windows app.">
+  <meta property="og:title" content="Media Filter — Local-first AI video organizer">
+  <meta property="og:description" content="Auto-tag your footage locally, filter by what is in the shot, and batch-transcode with FFmpeg.">
+  <meta property="og:image" content="screenshots/main-light.png">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232B7CA6'/%3E%3Cpath d='M11 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --canvas: #F4F8FB;
+      --surface: #FFFFFF;
+      --ink: #14232C;
+      --ink-2: #465A66;
+      --ink-3: #64757F;
+      --accent: #2B7CA6;
+      --accent-strong: #226584;
+      --accent-soft: rgba(43, 124, 166, 0.08);
+      --line: rgba(20, 35, 44, 0.09);
+      --line-strong: rgba(20, 35, 44, 0.16);
+      --shadow: 0 18px 50px rgba(20, 35, 44, 0.10);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-strong); }
+    .wrap { width: min(1120px, calc(100% - 48px)); margin: 0 auto; }
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: rgba(244, 248, 251, 0.86);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav { display: flex; align-items: center; gap: 12px; height: 64px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -0.01em; }
+    .brand svg { width: 28px; height: 28px; }
+    .nav .spacer { flex: 1; }
+    .nav a.plain { color: var(--ink-2); font-size: 14px; padding: 8px 10px; border-radius: 8px; }
+    .nav a.plain:hover { background: var(--accent-soft); color: var(--accent-strong); }
+    .lang { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2);
+      border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      height: 44px; padding: 0 20px; border-radius: 10px;
+      background: var(--accent); color: #fff; font-weight: 600; font-size: 15px;
+      border: 1px solid var(--accent);
+      box-shadow: 0 6px 18px rgba(43, 124, 166, 0.24);
+    }
+    .btn:hover { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+    .btn.secondary {
+      background: var(--surface); color: var(--ink); border-color: var(--line-strong);
+      box-shadow: none;
+    }
+    .btn.secondary:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--surface); }
+    .hero { padding: 64px 0 8px; text-align: center; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--accent-soft); color: var(--accent-strong);
+      border: 1px solid rgba(43, 124, 166, 0.20);
+      border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 600;
+      margin-bottom: 18px;
+    }
+    .hero h1 {
+      margin: 0 auto; max-width: 820px;
+      font-size: clamp(32px, 4.4vw, 52px); line-height: 1.15;
+      letter-spacing: -0.03em; font-weight: 700;
+    }
+    .hero h1 em { font-style: normal; color: var(--accent); }
+    .hero p.lede {
+      max-width: 700px; margin: 18px auto 0;
+      color: var(--ink-2); font-size: 17px;
+    }
+    .hero p.zh { color: var(--ink-3); font-size: 15px; margin-top: 6px; }
+    .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+    .meta { margin-top: 16px; color: var(--ink-3); font-size: 13px; }
+    .meta code { font-size: 12px; color: var(--ink-2); }
+    .shot {
+      margin: 42px 0 0; border-radius: 16px; overflow: hidden;
+      border: 1px solid var(--line-strong); background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .shot img { display: block; width: 100%; height: auto; }
+    section { padding: 72px 0; }
+    section h2 { font-size: clamp(24px, 2.6vw, 32px); letter-spacing: -0.02em; margin: 0 0 10px; }
+    section .sub { color: var(--ink-2); margin: 0 0 30px; max-width: 720px; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      padding: 24px; box-shadow: 0 1px 0 rgba(20, 35, 44, 0.02);
+    }
+    .card svg { width: 26px; height: 26px; color: var(--accent); margin-bottom: 14px; }
+    .card h3 { margin: 0 0 8px; font-size: 17px; letter-spacing: -0.01em; }
+    .card p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
+    .card p.zh { margin-top: 8px; color: var(--ink-3); font-size: 13.5px; }
+    .gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .gallery figure { margin: 0; }
+    .gallery img {
+      display: block; width: 100%; border-radius: 12px;
+      border: 1px solid var(--line-strong); box-shadow: 0 8px 26px rgba(20, 35, 44, 0.08);
+    }
+    .gallery figcaption { color: var(--ink-3); font-size: 13px; margin-top: 8px; }
+    .download {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 18px; padding: 32px; display: flex; gap: 28px;
+      align-items: center; justify-content: space-between; flex-wrap: wrap;
+    }
+    .download h3 { margin: 0 0 6px; font-size: 22px; letter-spacing: -0.02em; }
+    .download p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
+    .spec { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 28px; }
+    .spec div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+    .spec b { display: block; font-size: 14px; }
+    .spec span { color: var(--ink-3); font-size: 13px; }
+    footer {
+      border-top: 1px solid var(--line); padding: 28px 0 48px;
+      color: var(--ink-3); font-size: 13.5px;
+    }
+    footer .row { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+    footer .spacer { flex: 1; }
+    [data-lang="en"] .zh { display: none; }
+    [data-lang="zh"] .en { display: none; }
+    @media (max-width: 820px) {
+      .cards, .gallery, .spec { grid-template-columns: 1fr; }
+      .hero { padding-top: 44px; }
+      .nav a.plain.hide-sm { display: none; }
+    }
+  </style>
+</head>
+<body data-lang="en">
+  <header>
+    <div class="wrap nav">
+      <a class="brand" href="#top" style="color:inherit">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#2B7CA6"/><path d="M11 9l12 7-12 7z" fill="#fff"/></svg>
+        Media Filter
+      </a>
+      <span class="spacer"></span>
+      <a class="plain hide-sm" href="#features">Features</a>
+      <a class="plain hide-sm" href="#screenshots">Screenshots</a>
+      <a class="plain" href="https://github.com/yvgui2004/media-filter">GitHub</a>
+      <button class="lang" id="lang" type="button" aria-label="Switch language">中文</button>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="wrap">
+      <div class="hero">
+        <span class="eyebrow">Windows 10 / 11 · Local-first · Portable</span>
+        <h1 class="en">Find the clip you need <em>by what's in it.</em></h1>
+        <h1 class="zh">按画面内容，<em>找到你要的那条素材。</em></h1>
+        <p class="lede en">Scan a folder, tag every video and audio file with local AI or a cloud model, filter by content, then turn the selection into batch FFmpeg commands — no upload, no spreadsheet.</p>
+        <p class="lede zh">扫描文件夹，用本地 AI 或云端模型给每个视频、音频打内容标签，按标签筛选，再把勾选的文件直接变成批量 FFmpeg 命令。不建表格，不上传素材。</p>
+        <div class="actions">
+          <a class="btn" href="https://github.com/yvgui2004/media-filter/releases/latest">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+            <span class="en">Download for Windows</span><span class="zh">下载 Windows 版</span>
+          </a>
+          <a class="btn secondary" href="https://github.com/yvgui2004/media-filter">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.6.5.5 5.6.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A11.5 11.5 0 0 0 23.5 12C23.5 5.6 18.4.5 12 .5z"/></svg>
+            <span class="en">View source</span><span class="zh">查看源码</span>
+          </a>
+        </div>
+        <p class="meta en">Portable ZIP · Python, FFmpeg and the local model are bundled · MIT licensed</p>
+        <p class="meta zh">便携 ZIP · Python、FFmpeg、本地模型全部内置 · MIT 许可</p>
+
+        <figure class="shot">
+          <img src="screenshots/demo.gif" width="1440" height="900"
+               alt="Scanning a folder, tagging clips with local AI, filtering by tag, and generating batch FFmpeg commands">
+        </figure>
+      </div>
+    </div>
+
+    <section id="features">
+      <div class="wrap">
+        <h2 class="en">A media library that tags itself</h2>
+        <h2 class="zh">会自己打标签的素材库</h2>
+        <p class="sub en">Built for editors, archivists and anyone sitting on a folder of clips they can't search.</p>
+        <p class="sub zh">给剪辑师、素材管理员，以及所有"有一堆素材但搜不出来"的人。</p>
+        <div class="cards">
+          <article class="card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M5 15l.8 2.2L8 18l-2.2.8L5 21l-.8-2.2L2 18l2.2-.8z"/><path d="M19 14l.7 1.9L21.6 16.6l-1.9.7L19 19.2l-.7-1.9-1.9-.7 1.9-.7z"/></svg>
+            <h3>Local-first AI tagging</h3>
+            <p class="en">YOLOv8n runs on your GPU-free CPU. People, vehicles, pets, food, screens — 8 built-in tags without a single upload. Hybrid and cloud modes cover all 26.</p>
+            <p class="zh">YOLOv8n 在本机 CPU 推理，人物、车辆、宠物、食物、屏幕等 8 类标签无需上传；混合 / 云端模式覆盖 26 类。</p>
+          </article>
+          <article class="card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="M16 17l5-5-5-5" opacity="0"/><path d="M17 14l3 3-3 3"/></svg>
+            <h3>Batch FFmpeg, no syntax</h3>
+            <p class="en">Pick x265 or NVENC, preview every command with real paths, then copy, save as .bat, or run in place. Quoted paths with spaces just work.</p>
+            <p class="zh">选 x265 / NVENC 预设，带真实路径预览命令，可复制、存 .bat 或直接执行；带空格的路径也能正确处理。</p>
+          </article>
+          <article class="card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.4-3 8.4-7 10-4-1.6-7-5.6-7-10V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>
+            <h3>Private by default</h3>
+            <p class="en">Scanning is offline. The API key is encrypted with Windows DPAPI, keys are masked in logs, and nothing uploads before a confirmation card.</p>
+            <p class="zh">扫描全程离线；API Key 用 Windows DPAPI 加密，日志自动打码；上传前一定先弹确认卡。</p>
+          </article>
+        </div>
+        <div class="spec">
+          <div><b class="en">Real metadata</b><b class="zh">真实元数据</b><span class="en">ffprobe duration, video/audio bitrate, format, size</span><span class="zh">ffprobe 读取时长、音视频码率、格式、大小</span></div>
+          <div><b class="en">Filter &amp; sort</b><b class="zh">筛选与排序</b><span class="en">By format, tag or file name; sortable columns</span><span class="zh">按格式、标签、文件名筛选，列头排序</span></div>
+          <div><b class="en">Bilingual UI</b><b class="zh">中英界面</b><span class="en">Light / dark / system themes, Chinese and English</span><span class="zh">浅色 / 深色 / 跟随系统，中英文切换</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screenshots">
+      <div class="wrap">
+        <h2 class="en">Screenshots</h2>
+        <h2 class="zh">界面截图</h2>
+        <p class="sub en">Real captures from the app — local AI tagging on 14 demo files, zero failures.</p>
+        <p class="sub zh">真实界面截图：本地 AI 识别 14 个演示文件，0 失败。</p>
+        <div class="gallery">
+          <figure>
+            <img src="screenshots/main-light.png" alt="Main window, light theme" loading="lazy">
+            <figcaption class="en">Main window · light</figcaption>
+            <figcaption class="zh">主界面 · 浅色</figcaption>
+          </figure>
+          <figure>
+            <img src="screenshots/main-dark.png" alt="Main window, dark theme" loading="lazy">
+            <figcaption class="en">Main window · dark</figcaption>
+            <figcaption class="zh">主界面 · 深色</figcaption>
+          </figure>
+          <figure>
+            <img src="screenshots/batch.png" alt="Batch FFmpeg command dialog" loading="lazy">
+            <figcaption class="en">Batch commands</figcaption>
+            <figcaption class="zh">批量命令</figcaption>
+          </figure>
+          <figure>
+            <img src="screenshots/settings.png" alt="Settings, tag palette" loading="lazy">
+            <figcaption class="en">Settings · tags</figcaption>
+            <figcaption class="zh">设置 · 标签</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="download">
+      <div class="wrap">
+        <div class="download">
+          <div>
+            <h3 class="en">Get the portable build</h3>
+            <h3 class="zh">下载便携版</h3>
+            <p class="en">Unzip anywhere, double-click MediaFilter.exe. No Python install, no FFmpeg setup, no account.</p>
+            <p class="zh">解压到任意目录，双击 MediaFilter.exe 即可。不用装 Python、不用配 FFmpeg、不用注册。</p>
+          </div>
+          <a class="btn" href="https://github.com/yvgui2004/media-filter/releases/latest">
+            <span class="en">Latest release</span><span class="zh">最新版本</span>
+          </a>
+        </div>
+        <div class="spec">
+          <div><b>Windows 10 / 11 · 64-bit</b><span class="en">Only supported platform today</span><span class="zh">目前仅支持 Windows</span></div>
+          <div><b class="en">~160 MB ZIP</b><b class="zh">约 160 MB ZIP</b><span class="en">Python + FFmpeg + model bundled</span><span class="zh">内置 Python、FFmpeg 与模型</span></div>
+          <div><b class="en">MIT source</b><b class="zh">源码 MIT</b><span class="en">FFmpeg GPL-3.0, YOLOv8 AGPL-3.0 — see notices</span><span class="zh">FFmpeg GPL-3.0、YOLOv8 AGPL-3.0，详见说明</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap row">
+      <span>© 2026 yvgui2004</span>
+      <a href="https://github.com/yvgui2004/media-filter">GitHub</a>
+      <a href="https://github.com/yvgui2004/media-filter/blob/master/LICENSE">MIT License</a>
+      <a href="https://github.com/yvgui2004/media-filter/blob/master/THIRD_PARTY_NOTICES.md">Third-party notices</a>
+      <span class="spacer"></span>
+      <span class="en">Built with PySide6, FFmpeg and ONNX Runtime.</span>
+      <span class="zh">使用 PySide6、FFmpeg 与 ONNX Runtime 构建。</span>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var btn = document.getElementById('lang');
+      var root = document.body;
+      try {
+        var saved = localStorage.getItem('mf-lang');
+        if (saved) root.dataset.lang = saved;
+      } catch (e) {}
+      function sync() {
+        btn.textContent = root.dataset.lang === 'zh' ? 'EN' : '中文';
+        document.documentElement.lang = root.dataset.lang === 'zh' ? 'zh-CN' : 'en';
+      }
+      btn.addEventListener('click', function () {
+        root.dataset.lang = root.dataset.lang === 'zh' ? 'en' : 'zh';
+        try { localStorage.setItem('mf-lang', root.dataset.lang); } catch (e) {}
+        sync();
+      });
+      sync();
+    })();
+  </script>
+</body>
+</html>

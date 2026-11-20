@@ -104,7 +104,8 @@ Windows 10 / 11，64 位。首次启动约 1-3 秒（单文件程序要先解压
 
 配置 / Configuration
 --------------------
-配置保存在 %APPDATA%\\media-filter-v2\\config.json。
+配置保存在 %LOCALAPPDATA%\\media-filter-v2\\config.json。
+运行日志在同目录的 mediafilter.log（循环保存，便于反馈问题）。
 云端识别需要在「设置」里填写 API Key（用 Windows DPAPI 加密保存）。
 AI 模型已内置，无需额外下载；如需更换模型，在「设置 → AI 模型」里指定。
 

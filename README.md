@@ -1,17 +1,61 @@
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
   <img alt="PySide6" src="https://img.shields.io/badge/UI-PySide6%20%2F%20Qt6-41cd52?logo=qt&logoColor=white">
+  <img alt="Windows" src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
+  <a href="https://github.com/yvgui2004/media-filter/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/yvgui2004/media-filter/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
-<h1 align="center">mediafilter</h1>
+<h1 align="center">Media Filter</h1>
 
 <p align="center">
-  <b>EN</b> — A desktop media browser: scan a folder, see every video and audio file with its real metadata, tag it with AI, filter it, and turn a selection into batch FFmpeg commands.<br>
-  <b>中文</b> — 桌面端媒体浏览器：扫描一个文件夹，在一张表里看清每个视频、音频的大小、时长和码率，再打标签、筛选，把勾选的文件变成批量 FFmpeg 命令。
+  <b>Find the clip you need by what's in it.</b><br>
+  Scan a folder, auto-tag video and audio on your own machine, filter by content, and turn the selection into batch FFmpeg commands.
 </p>
 
+<p align="center">
+  <b>按画面内容，找到你要的那条素材。</b><br>
+  扫描文件夹，本机给每个视频、音频打内容标签，按标签筛选，再把勾选的文件变成批量 FFmpeg 命令。
+</p>
+
+<p align="center">
+  <a href="https://github.com/yvgui2004/media-filter/releases/latest">
+    <img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows_portable-2B7CA6?style=for-the-badge&logo=windows11&logoColor=white">
+  </a>
+  <a href="#install-from-source--从源码安装">
+    <img alt="Build from source" src="https://img.shields.io/badge/Build-from_source-465A66?style=for-the-badge&logo=python&logoColor=white">
+  </a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/demo.gif" alt="Scan a folder, tag clips with local AI, filter by tag, and generate batch FFmpeg commands" width="880">
+</p>
+
+<p align="center">
+  <sub>Real capture: 14 demo files, local YOLOv8n tagging, 11 tagged and 0 failures. / 真实录制：14 个演示文件，本地 YOLOv8n 识别，11 个成功、0 失败。</sub>
+</p>
+
+**Why people use it / 为什么用它**
+
+- **Your archive becomes searchable.** Tag clips by people, vehicles, pets, food, screens, scenes and shot size — locally with YOLOv8n, or through any OpenAI-compatible vision model. / **素材库变得可搜索**：人物、车辆、宠物、食物、屏幕、场景、景别，本地模型或任意 OpenAI 格式视觉模型都能打标。
+- **From "find it" to "done" in one window.** Filter by tag, tick what you need, and copy / save / run FFmpeg commands without writing a single filter string. / **从找到到处理只用一个窗口**：按标签筛选，勾选后直接复制、保存或执行 FFmpeg 命令。
+- **Nothing leaves your machine unless you say so.** Scanning and local tagging are offline; uploads wait behind a confirmation card, and the API key is DPAPI-encrypted. / **素材默认不出本机**：扫描与本地识别全程离线，上传前必须确认，API Key 用 DPAPI 加密。
+
+> If this saves you time, a ⭐ helps other editors find it. / 如果它帮你省了时间，点个 ⭐ 能让更多剪辑同行看到。
+
 ---
+
+## Screenshots / 界面预览
+
+| Light / 浅色 | Dark / 深色 |
+| --- | --- |
+| ![Main window, light theme](docs/screenshots/main-light.png) | ![Main window, dark theme](docs/screenshots/main-dark.png) |
+
+| Batch FFmpeg commands / 批量命令 | Settings · tags / 设置·标签 |
+| --- | --- |
+| ![Batch command dialog](docs/screenshots/batch.png) | ![Settings, tags tab](docs/screenshots/settings.png) |
+
+Real screenshots from the running app (local AI, 14 demo files). / 截图直接来自运行中的程序（本地 AI 识别，14 个演示文件）。
 
 ## Download / 下载 — the fastest way to start / 最快的启用方式
 
@@ -21,7 +65,7 @@
 
 | Package / 文件 | Contents / 内容 | Requires / 需要 |
 | --- | --- | --- |
-| `MediaFilter-0.1.0-win64.zip` | `MediaFilter.exe` (app + YOLOv8n model), `ffmpeg\bin`, `使用说明.txt` | Windows 10 / 11, 64-bit. Nothing else. |
+| `MediaFilter-<version>-win64.zip` | `MediaFilter.exe` (app + YOLOv8n model), `ffmpeg\bin`, `使用说明.txt` | Windows 10 / 11, 64-bit. Nothing else. |
 
 Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatically. The single-file exe unpacks itself on launch — about 1–3 s on an SSD (measured 1.7 s on the build machine). / 请保持 `ffmpeg` 文件夹与 exe 的相对位置；单文件程序启动时先自解压，SSD 上约 1–3 秒（打包机实测 1.7 秒）。
 
@@ -31,7 +75,7 @@ Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatical
 
 - Recursively scans a folder and reads real metadata with `ffprobe`: size, duration, video and audio bitrate, format, modification time.
 - Shows everything in a sortable, filterable table with checkboxes and live totals (file count, total duration, total size).
-- **Optional AI tagging** — label videos by what is actually in them: people, screens, food, pets, vehicles, scenery, shot size, technical traits. Run it fully local with YOLOv8n, local-first with a cloud fallback (hybrid), or fully in the cloud. Results are cached per file.
+- **Optional AI tagging** — label videos by what is actually in them: people, screens, food, pets, vehicles, scenery, shot size, technical traits. Run it fully local with YOLOv8n (8 of the 26 built-in tags: people, vehicles, cats, dogs, food, screens, computers, phones), local-first with a cloud fallback (hybrid), or fully in the cloud (all 26 tags). Results are cached per file.
 - **Batch FFmpeg** — pick an x265 / NVENC preset, then copy the commands, save them as a `.bat`, or run them in place.
 - Format conversion (stream copy or re-encode), TXT report export, light / dark / system themes, Chinese and English UI.
 
@@ -39,7 +83,7 @@ Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatical
 
 - 递归扫描文件夹，用 `ffprobe` 读取真实元数据：大小、时长、音视频码率、格式、修改时间。
 - 一张可排序、可筛选的表格，带勾选和实时统计（文件数、总时长、总大小）。
-- **可选 AI 内容识别** —— 按画面内容打标签：人物、屏幕、食物、宠物、车辆、场景、景别、技术特征。支持纯本地（YOLOv8n）、本地先筛的混合模式、全云端三种跑法，结果按文件缓存。
+- **可选 AI 内容识别** —— 按画面内容打标签：人物、屏幕、食物、宠物、车辆、场景、景别、技术特征。支持纯本地（YOLOv8n，可识别 26 个内置标签中的 8 类：人物、车辆、猫、狗、食物、屏幕、电脑、手机）、本地先筛的混合模式、全云端（26 个标签全覆盖）三种跑法，结果按文件缓存。
 - **批量 FFmpeg** —— 选 x265 / NVENC 预设，复制命令、存成 `.bat`，或直接执行。
 - 格式转换（流拷贝或重编码）、导出 TXT 清单、浅色 / 深色 / 跟随系统主题、中英文界面。
 
@@ -125,7 +169,7 @@ Scanning and cloud-only tagging work without this file. / 纯扫描和全云端�
 .venv\Scripts\python.exe -m mediafilter
 ```
 
-Or double-click `run.bat` after step 4. The first launch opens the setup dialog; settings live in `%LOCALAPPDATA%\media-filter-v2\config.json`. / 装完第 4 步后也可以直接双击 `run.bat`。首次启动会打开设置向导，配置保存在 `%LOCALAPPDATA%\media-filter-v2\config.json`。
+Or double-click `run.bat` after step 4. Pass a folder to scan it right away: `.venv\Scripts\python.exe -m mediafilter "D:\footage"`. The first launch opens the setup dialog; settings live in `%LOCALAPPDATA%\media-filter-v2\config.json`. / 装完第 4 步后也可以直接双击 `run.bat`；在命令后面加一个目录可启动后立刻扫描，例如 `.venv\Scripts\python.exe -m mediafilter "D:\footage"`。首次启动会打开设置向导，配置保存在 `%LOCALAPPDATA%\media-filter-v2\config.json`。
 
 ### Troubleshooting / 常见问题
 
@@ -134,6 +178,7 @@ Or double-click `run.bat` after step 4. The first launch opens the setup dialog;
 - **Qt platform plugin error** — reinstall PySide6 in the venv (`pip install --force-reinstall PySide6`) and make sure Python is 64-bit.
 - **`python` is not recognized** — use the `py` launcher, or reinstall Python with “Add Python to PATH”.
 - **Reset settings** — delete `%LOCALAPPDATA%\media-filter-v2\config.json`. This also removes the saved API key and custom labels.
+- **Something went wrong** — attach `%LOCALAPPDATA%\media-filter-v2\mediafilter.log` to bug reports. It rotates at 1 MB and keeps 3 backups; keys and frames never reach it.
 
 **中文**：
 
@@ -142,6 +187,7 @@ Or double-click `run.bat` after step 4. The first launch opens the setup dialog;
 - **Qt platform plugin 报错** —— 在虚拟环境里重装 PySide6，并确认 Python 是 64 位。
 - **`python` 不是内部或外部命令** —— 用 `py` 启动器，或重装 Python 时勾选 “Add Python to PATH”。
 - **重置设置** —— 删除 `%LOCALAPPDATA%\media-filter-v2\config.json`（会同时清掉 API Key 和自定义标签）。
+- **出问题了** —— 反馈问题时附上 `%LOCALAPPDATA%\media-filter-v2\mediafilter.log`。日志按 1 MB 循环、保留 3 份，里面不会出现密钥明文或抽出的画面。
 
 ### Build the portable release / 打包便携版（可选）
 
@@ -153,14 +199,15 @@ $env:MEDIAFILTER_FFMPEG_DIR = "C:\ffmpeg\bin"   # a folder with ffmpeg.exe + ffp
 
 Output: `release\MediaFilter-<version>-win64\` and the matching `.zip`, plus its SHA-256. The exe is onefile; FFmpeg is copied beside it so each launch does not unpack another ~180 MB. / 输出便携目录和同名 zip，附 SHA-256。exe 为单文件，FFmpeg 放在旁边，避免每次启动重复解压。
 
-### Tests (optional) / 测试（可选）
+### Tests and type checking / 测试与类型检查
 
 ```powershell
 .venv\Scripts\python.exe -m pip install -e ".[dev,ai]"
 .venv\Scripts\python.exe -m pytest
+.venv\Scripts\python.exe -m pyright
 ```
 
-117 pytest cases. / 共 117 个用例。
+128 pytest cases run headless (`QT_QPA_PLATFORM=offscreen`), and pyright reports zero errors against `pyrightconfig.json`. Both steps also run on GitHub Actions for every push and pull request. / 共 128 个用例，可在无显示器环境运行；pyright 按仓库内的 `pyrightconfig.json` 检查，0 错误。两步都已接入 GitHub Actions。
 
 ## How to use / 如何使用
 
@@ -171,7 +218,7 @@ After installation / 安装完成后：
 3. **Batch commands** — tick the files, open 「批量命令」, choose a preset, then copy, save or run. 「格式转换」 uses the same flow with a container / stream-copy choice.
 4. **Settings** — the gear opens default recognition mode, API key (stored only on this machine and masked everywhere), model selection, the 26 built-in tags, custom labels, and sampling / upload options.
 
-Full guide: [使用文档.md](使用文档.md)
+Full guide: [使用文档.md](使用文档.md) · Changes: [CHANGELOG.md](CHANGELOG.md) · Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) · Security: [SECURITY.md](SECURITY.md)
 
 **中文**：
 
@@ -184,16 +231,16 @@ Full guide: [使用文档.md](使用文档.md)
 
 **English**
 
-Python 3.10+ with a PySide6 / Qt6 desktop shell (Fusion plus token-driven QSS themes and a model/view table). Scanning calls `ffprobe` from a cancellable thread pool; FFmpeg commands are built as plain data in `core/`, kept apart from the UI. AI tagging is an optional extra: frames are piped from `ffmpeg` into ONNX Runtime with a YOLOv8n model, and cloud modes work with any OpenAI-compatible `/v1/models` endpoint. Config is JSON; the API key is encrypted with Windows DPAPI. 117 pytest cases and a strict pyright pass cover the core logic.
+Python 3.10+ with a PySide6 / Qt6 desktop shell (Fusion plus token-driven QSS themes and a model/view table). Scanning calls `ffprobe` from a cancellable thread pool; FFmpeg commands are built as plain data in `core/`, kept apart from the UI. AI tagging is an optional extra: frames are piped from `ffmpeg` into ONNX Runtime with a YOLOv8n model, and cloud modes work with any OpenAI-compatible `/v1/models` endpoint. Config is JSON; the API key is encrypted with Windows DPAPI; a rotating log is written next to the config for support. 128 pytest cases and a pyright pass cover the core logic.
 
 **中文**
 
-Python 3.10+，界面为 PySide6 / Qt6（Fusion + token 驱动的 QSS 主题、model/view 表格）。扫描在可取消的线程池里调用 `ffprobe`；FFmpeg 命令在 `core/` 里以纯数据构建，和界面解耦。AI 识别是可选依赖：`ffmpeg` 管道抽帧，ONNX Runtime 跑 YOLOv8n；抽帧强度在本地和云端共用一套帧数策略。云端模式兼容任意 OpenAI 格式的 `/v1/models` 接口。配置是 JSON，API Key 用 Windows DPAPI 加密。117 个 pytest 用例与严格 pyright 检查覆盖核心逻辑。
+Python 3.10+，界面为 PySide6 / Qt6（Fusion + token 驱动的 QSS 主题、model/view 表格）。扫描在可取消的线程池里调用 `ffprobe`；FFmpeg 命令在 `core/` 里以纯数据构建，和界面解耦。AI 识别是可选依赖：`ffmpeg` 管道抽帧，ONNX Runtime 跑 YOLOv8n；抽帧强度在本地和云端共用一套帧数策略。云端模式兼容任意 OpenAI 格式的 `/v1/models` 接口。配置是 JSON，API Key 用 Windows DPAPI 加密，配置旁边写循环日志便于排查问题。128 个 pytest 用例与 pyright 检查覆盖核心逻辑。
 
 ## License / 许可
 
 The application source is **MIT** — see [LICENSE](LICENSE).
 
-The repository itself stores source only. The **prebuilt portable release** redistributes two third-party components, each under its own license: an FFmpeg build (**GPL-3.0**; source at [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)) and Ultralytics YOLOv8n weights (**AGPL-3.0**; source at [ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)). If you redistribute the portable package, comply with those licenses.
+The repository itself stores source only. The **prebuilt portable release** redistributes three third-party components, each under its own license: an FFmpeg build (**GPL-3.0**), Ultralytics YOLOv8n weights (**AGPL-3.0**) and PySide6 / Qt (**LGPL-3.0**). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for sources and details. If you redistribute the portable package, comply with those licenses.
 
-**中文**：应用源码采用 **MIT** 许可，见 [LICENSE](LICENSE)。仓库本身只存放源码；**预编译便携包**额外包含两个第三方组件，各自适用其原许可：FFmpeg 构建（**GPL-3.0**，源码见 [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)）与 Ultralytics YOLOv8n 权重（**AGPL-3.0**，源码见 [ultralytics/ultralytics](https://github.com/ultralytics/ultralytics)）。再分发便携包时请遵守对应许可。
+**中文**：应用源码采用 **MIT** 许可，见 [LICENSE](LICENSE)。仓库本身只存放源码；**预编译便携包**额外包含三个第三方组件，各自适用其原许可：FFmpeg（**GPL-3.0**）、Ultralytics YOLOv8n 权重（**AGPL-3.0**）、PySide6 / Qt（**LGPL-3.0**）。源码地址与说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；再分发便携包时请遵守对应许可。
