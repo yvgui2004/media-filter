@@ -97,7 +97,10 @@ class FolderChip(QAbstractButton):
 
         path_text = ""
         if self._path:
-            path_avail = max(0, min(avail_total // 2, fm_path.horizontalAdvance(self._path)))
+            # The name keeps its space; the path takes whatever is left so a
+            # short name (e.g. "Videos") shows its parent without eliding.
+            left = avail_total - fm_name.horizontalAdvance(self._name) - 8
+            path_avail = max(0, min(left, fm_path.horizontalAdvance(self._path)))
             path_text = fm_path.elidedText(self._path, Qt.ElideMiddle, path_avail)
         path_w = fm_path.horizontalAdvance(path_text)
         name_avail = max(0, avail_total - (path_w + 8 if path_text else 0))
