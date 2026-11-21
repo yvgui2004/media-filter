@@ -92,7 +92,7 @@ def main() -> None:
     config.save()
 
     window = MainWindow(tr, config)
-    window.resize(1440, 900)
+    window.resize(1200, 700)
     window.show()
     process_events(app)
 

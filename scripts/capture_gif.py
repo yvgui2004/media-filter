@@ -37,7 +37,7 @@ from mediafilter.ui.widgets.batch_process import BatchProcessDialog
 
 FRAMES_DIR = Path(tempfile.mkdtemp(prefix="mediafilter-gif-frames-"))
 DURATIONS_MS = [1600, 1900, 1900, 2600]
-CANVAS = (1000, 625)
+CANVAS = (1200, 760)
 
 
 def wait_until(app: QApplication, predicate, timeout: float = 180.0) -> None:
@@ -97,7 +97,7 @@ def main() -> None:
     config.save()
 
     window = MainWindow(tr, config)
-    window.resize(1440, 900)
+    window.resize(1200, 700)
     window.show()
     process_events(app, 0.6)
     frames: list[Path] = []

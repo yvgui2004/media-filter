@@ -94,6 +94,7 @@
       box-shadow: var(--shadow);
     }
     .shot img { display: block; width: 100%; height: auto; }
+    .shot a, .gallery a { display: block; line-height: 0; }
     section { padding: 72px 0; }
     section h2 { font-size: clamp(24px, 2.6vw, 32px); letter-spacing: -0.02em; margin: 0 0 10px; }
     section .sub { color: var(--ink-2); margin: 0 0 30px; max-width: 720px; }
@@ -106,7 +107,7 @@
     .card h3 { margin: 0 0 8px; font-size: 17px; letter-spacing: -0.01em; }
     .card p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
     .card p.zh { margin-top: 8px; color: var(--ink-3); font-size: 13.5px; }
-    .gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .gallery { display: grid; grid-template-columns: 1fr; gap: 26px; max-width: 1040px; margin: 0 auto; }
     .gallery figure { margin: 0; }
     .gallery img {
       display: block; width: 100%; border-radius: 12px;
@@ -176,8 +177,10 @@
         <p class="meta zh">便携 ZIP · Python、FFmpeg、本地模型全部内置 · MIT 许可</p>
 
         <figure class="shot">
-          <img src="screenshots/demo.gif" width="1000" height="625"
-               alt="Scanning a folder, tagging clips with local AI, filtering by tag, and processing the selection with FFmpeg">
+          <a href="screenshots/demo.gif" target="_blank" rel="noopener">
+            <img src="screenshots/demo.gif" width="1200" height="760"
+                 alt="Scanning a folder, tagging clips with local AI, filtering by tag, and processing the selection with FFmpeg">
+          </a>
         </figure>
       </div>
     </div>
@@ -224,22 +227,22 @@
         <p class="sub zh">真实界面截图：主界面为本地 AI 识别 14 个演示文件，0 失败。</p>
         <div class="gallery">
           <figure>
-            <img src="screenshots/main-light.png" alt="Main window, light theme" loading="lazy">
+            <a href="screenshots/main-light.png" target="_blank" rel="noopener"><img src="screenshots/main-light.png" alt="Main window, light theme — 14 demo files tagged by the local model" loading="lazy"></a>
             <figcaption class="en">Main window · light</figcaption>
             <figcaption class="zh">主界面 · 浅色</figcaption>
           </figure>
           <figure>
-            <img src="screenshots/main-dark.png" alt="Main window, dark theme" loading="lazy">
+            <a href="screenshots/main-dark.png" target="_blank" rel="noopener"><img src="screenshots/main-dark.png" alt="Main window, dark theme" loading="lazy"></a>
             <figcaption class="en">Main window · dark</figcaption>
             <figcaption class="zh">主界面 · 深色</figcaption>
           </figure>
           <figure>
-            <img src="screenshots/batch.png" alt="Batch processing dialog" loading="lazy">
+            <a href="screenshots/batch.png" target="_blank" rel="noopener"><img src="screenshots/batch.png" alt="Batch processing dialog — NVENC HEVC compression with command preview" loading="lazy"></a>
             <figcaption class="en">Batch processing</figcaption>
             <figcaption class="zh">批量处理</figcaption>
           </figure>
           <figure>
-            <img src="screenshots/settings.png" alt="Settings, tag palette" loading="lazy">
+            <a href="screenshots/settings.png" target="_blank" rel="noopener"><img src="screenshots/settings.png" alt="Settings, tag palette — custom labels and GPU inference" loading="lazy"></a>
             <figcaption class="en">Settings · tags</figcaption>
             <figcaption class="zh">设置 · 标签</figcaption>
           </figure>

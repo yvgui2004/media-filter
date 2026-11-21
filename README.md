@@ -48,13 +48,25 @@
 
 ## Screenshots / 界面预览
 
-| Light / 浅色 | Dark / 深色 |
-| --- | --- |
-| ![Main window, light theme](docs/screenshots/main-light.png) | ![Main window, dark theme](docs/screenshots/main-dark.png) |
+<p align="center">
+  <a href="docs/screenshots/main-light.png"><img src="docs/screenshots/main-light.png" alt="Main window, light theme — 14 demo files tagged by the local model" width="880"></a>
+</p>
+<p align="center"><sub>Main window · light / 主界面 · 浅色</sub></p>
 
-| Batch processing / 批量处理 | Settings · tags / 设置·标签 |
-| --- | --- |
-| ![Batch processing dialog](docs/screenshots/batch.png) | ![Settings, tags tab](docs/screenshots/settings.png) |
+<p align="center">
+  <a href="docs/screenshots/batch.png"><img src="docs/screenshots/batch.png" alt="Batch processing dialog — NVIDIA NVENC HEVC compression with command preview" width="880"></a>
+</p>
+<p align="center"><sub>Batch processing / 批量处理</sub></p>
+
+<p align="center">
+  <a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="Settings, tags tab — custom labels and GPU inference device" width="880"></a>
+</p>
+<p align="center"><sub>Settings · tags / 设置 · 标签</sub></p>
+
+<p align="center">
+  <a href="docs/screenshots/main-dark.png"><img src="docs/screenshots/main-dark.png" alt="Main window, dark theme" width="880"></a>
+</p>
+<p align="center"><sub>Main window · dark / 主界面 · 深色</sub></p>
 
 Real screenshots from the running app (main window: local AI tagging on the 14 demo files). / 截图直接来自运行中的程序（主界面为本地 AI 识别 14 个演示文件）。
 
