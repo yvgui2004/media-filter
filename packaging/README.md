@@ -60,15 +60,15 @@ winget validate --manifest packaging\winget\yvgui2004.MediaFilter\0.1.1
 
 Current status: the first submission (`0.1.1`, new package) is open as
 [microsoft/winget-pkgs#484604](https://github.com/microsoft/winget-pkgs/pull/484604)
-and has passed validation. Submit `0.2.0` only after that PR merges — winget
+and has passed validation. Submit `0.2.1` only after that PR merges — winget
 rejects an update when the base package does not exist yet. Once merged, either
 configure `WINGET_TOKEN` before the next tag, or run the script manually:
 
 ```powershell
 $env:WINGET_TOKEN = "<classic PAT with public_repo>"
-.venv\Scripts\python.exe scripts\winget_submit.py --version 0.2.0 `
-  --url https://github.com/yvgui2004/media-filter/releases/download/v0.2.0/MediaFilter-0.2.0-win64.zip `
-  --sha256 211331abec823fd7559e27033922557a5640444f23d75650a02900830d929566
+.venv\Scripts\python.exe scripts\winget_submit.py --version 0.2.1 `
+  --url https://github.com/yvgui2004/media-filter/releases/download/v0.2.1/MediaFilter-0.2.1-win64.zip `
+  --sha256 d49a0587629eaba042368d392f42012473c38b1e91f1e1415c6e4e89a955b3b5
 ```
 
 ## Scoop
