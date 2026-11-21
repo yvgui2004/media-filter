@@ -56,7 +56,7 @@
 | --- | --- |
 | ![Batch processing dialog](docs/screenshots/batch.png) | ![Settings, tags tab](docs/screenshots/settings.png) |
 
-Real screenshots from the running app (local AI, 14 demo files). / 截图直接来自运行中的程序（本地 AI 识别，14 个演示文件）。
+Real screenshots from the running app (main window: local AI tagging on the 14 demo files). / 截图直接来自运行中的程序（主界面为本地 AI 识别 14 个演示文件）。
 
 ## Download / 下载 — the fastest way to start / 最快的启用方式
 
