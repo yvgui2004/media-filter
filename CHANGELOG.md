@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-21
+
+GPU-accelerated tagging and one batch-processing dialog.
+
 ### Added
 
 - **GPU inference on Windows.** Local tagging now uses ONNX Runtime DirectML, so
@@ -34,6 +38,13 @@ All notable changes to this project are documented here. The format follows
   x265 / x264, NVIDIA NVENC and AMD AMF with a CPU fallback, plans collision-safe
   output paths, previews the exact commands, shows overall and per-file
   progress, and summarises successes, failures and size savings.
+
+### Fixed
+
+- Switching tasks in the batch dialog resets the form to the top instead of
+  leaving it scrolled halfway down the previous task.
+- The advanced-options summary line hides while the panel is expanded.
+- The hover row lookup in `select_field.py` is narrowed for pyright.
 
 ## [0.1.1] — 2026-11-20
 

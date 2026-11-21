@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mediafilter"
-version = "0.1.1"
+version = "0.2.0"
 description = "Desktop media browser: scan, tag with local or cloud AI, and generate batch FFmpeg commands."
 readme = "README.md"
 requires-python = ">=3.10"
