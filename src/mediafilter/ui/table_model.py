@@ -207,6 +207,9 @@ class FileRecordModel(QAbstractTableModel):
     def checked_records(self) -> list[FileRecord]:
         return [r for r in self._records if r.checked]
 
+    def checked_rows(self) -> list[int]:
+        return [row for row, rec in enumerate(self._records) if rec.checked]
+
     def remove_rows(self, rows: list[int]) -> None:
         for row in sorted(set(rows), reverse=True):
             self.beginRemoveRows(QModelIndex(), row, row)

@@ -78,9 +78,13 @@ class RecordDelegate(QStyledItemDelegate):
             Qt.CheckStateRole
         ) == Qt.Checked
         selected = bool(option.state & QStyle.State_Selected)
+        previewing = bool(getattr(view, "_dragging", False) and selected)
+        preview_tick = getattr(view, "_drag_target", None)
 
         c = self._colors
-        if checked:
+        if previewing:
+            background = c["selection"] if preview_tick else c["surface"]
+        elif checked:
             background = c["accent_soft"]
         elif selected:
             background = c["selection"]
@@ -90,15 +94,29 @@ class RecordDelegate(QStyledItemDelegate):
             background = c["surface"]
         painter.fillRect(rect, background)
 
-        if checked and col == FileRecordModel.COL_CHECK:
+        shown_checked = bool(preview_tick) if previewing else checked
+        if shown_checked and col == FileRecordModel.COL_CHECK:
             painter.fillRect(QRectF(rect.left(), rect.top(), 3, rect.height()), c["accent"])
 
         painter.fillRect(
             QRectF(rect.left(), rect.bottom(), rect.width(), 1), c["row_line"]
         )
 
+        last_col = index.model().columnCount() - 1
+        if previewing and preview_tick is False:
+            # "Will untick" preview: no fill, just a light dashed boundary.
+            self._paint_row_outline(
+                painter, rect, c["line_strong"], col, last_col, dashed=True,
+            )
+        elif (not previewing and not checked and not selected
+              and view.currentIndex().row() == row and view.hasFocus()):
+            # Keyboard focus is not a selection: a hairline, not a blue row.
+            self._paint_row_outline(
+                painter, rect, c["line_strong"], col, last_col, dashed=False,
+            )
+
         if col == FileRecordModel.COL_CHECK:
-            self._paint_check(painter, rect, checked)
+            self._paint_check(painter, rect, shown_checked)
         elif col == FileRecordModel.COL_NAME:
             self._paint_text(
                 painter, rect.adjusted(10, 0, -10, 0), rec.name,
@@ -137,6 +155,22 @@ class RecordDelegate(QStyledItemDelegate):
         fm = QFontMetrics(font)
         text = fm.elidedText(text or "—", Qt.ElideRight, max(0, rect.width()))
         painter.drawText(rect, align, text)
+
+    def _paint_row_outline(self, painter: QPainter, rect, color, col: int,
+                           last_col: int, dashed: bool) -> None:
+        pen = QPen(color, 1, Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        left = rect.left() + 0.5
+        right = rect.right() - 0.5
+        top = rect.top() + 0.5
+        bottom = rect.bottom() - 0.5
+        painter.drawLine(QPointF(left, top), QPointF(right, top))
+        painter.drawLine(QPointF(left, bottom), QPointF(right, bottom))
+        if col == FileRecordModel.COL_CHECK:
+            painter.drawLine(QPointF(left, top), QPointF(left, bottom))
+        if col == last_col:
+            painter.drawLine(QPointF(right, top), QPointF(right, bottom))
 
     def _paint_check(self, painter: QPainter, rect, checked: bool) -> None:
         c = self._colors

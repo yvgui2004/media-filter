@@ -30,7 +30,7 @@ git status --short
 | 便携包内容变化 | `packaging/build.py` 的 `assemble()` 复制清单；`packaging/build.py` 的 `readme_text()`；README 的 `MediaFilter-<version>-win64.zip` 内容表；`packaging/README.md` | `使用说明.txt` | `packaging/build.py --skip-build --no-zip` 后检查目录 |
 | 平台/启动方式/CLI | README 环境要求 + 安装 + 使用；`使用文档.md` 环境要求；`docs/index.html` hero/spec；`packaging/build.py` 的 `readme_text()` | `core/secret_store.py`（DPAPI 平台限制）；`packaging/README.md` | 在目标平台启动一次 |
 | 发版 | `pyproject.toml` 的 `version`；`packaging/version_info.txt`（FileVersion / ProductVersion / filevers / prodvers）；`CHANGELOG.md` 新段；`docs/releases/vX.Y.Z.md`；`packaging/scoop/media-filter.json`（version/url/extract_dir）；winget 清单（`scripts/winget_submit.py`）；`git tag vX.Y.Z` | README/使用文档测试数量；`docs/index.html` 的 `~168 MB ZIP` | CI release dry run；release notes 生成 |
-| 测试数量变化 | README 3 行 4 处：`198 pytest cases` / `共 198 个用例` / `198 pytest cases`（英文 2 处、中文 2 处）；`使用文档.md` 2 处：`pytest 用例（198 个）` 和 `当前 198 个用例` | 不要改历史 `docs/releases/v0.1.1.md`（128）和 `v0.2.0.md`（196） | `rg -n "\\b196\\b|\\b197\\b|\\b198\\b" README.md 使用文档.md docs/releases` |
+| 测试数量变化 | README 3 行 4 处：`205 pytest cases` / `共 205 个用例` / `205 pytest cases`（英文 2 处、中文 2 处）；`使用文档.md` 2 处：`pytest 用例（205 个）` 和 `当前 205 个用例` | 不要改历史 `docs/releases/v0.1.1.md`（128）和 `v0.2.0.md`（196） | `rg -n "\\b196\\b|\\b197\\b|\\b205\\b" README.md 使用文档.md docs/releases` |
 | 截图/GIF 变化 | `docs/screenshots/main-light.png`、`main-dark.png`、`batch.png`、`settings.png`、`demo.gif`；README 图片链接/alt/说明；`docs/index.html` gallery/alt | README 的 `14 demo files` / `11 tagged`；`docs/index.html` 的 `14 demo files` 文案 | `capture_screenshots.py`、`capture_gif.py` |
 | 删除功能 | 全仓库搜功能名：`rg -n "旧功能名" README.md 使用文档.md docs packaging src tests`；清理 README/官网/使用文档/截图/i18n/测试 | 历史 release notes 只保留历史，不删 | pytest；截图脚本 |
 
@@ -39,13 +39,13 @@ git status --short
 改完用这条命令扫一遍：
 
 ```bat
-rg -n "\b196\b|\b197\b|\b198\b|168 MB|14 demo|8 of the 26|26 个|0\.2\.0" README.md 使用文档.md docs/index.html packaging/scoop packaging/README.md .github/workflows/release.yml
+rg -n "\b196\b|\b197\b|\b205\b|168 MB|14 demo|8 of the 26|26 个|0\.2\.0" README.md 使用文档.md docs/index.html packaging/scoop packaging/README.md .github/workflows/release.yml
 ```
 
 当前基准：
 
-- README：`198` 出现 3 处（英文 2 + 中文 1）。
-- `使用文档.md`：`198` 出现 2 处。
+- README：`205` 出现 3 处（英文 2 + 中文 1）。
+- `使用文档.md`：`205` 出现 2 处。
 - `docs/releases/v0.2.0.md`：`196` 是历史发布说明，**不要改**。
 - `docs/index.html`：`~168 MB ZIP`；0.2.0 实际 zip 为 176,284,923 字节（约 168 MiB）。
 - 截图说明：`14 demo files` / `11 tagged` / `0 failures`，换演示素材后一起改。

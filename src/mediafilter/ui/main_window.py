@@ -58,7 +58,7 @@ from .filter_proxy import FilterProxyModel
 from .icons import brand_pixmap, line_icon
 from .motion import REVEAL, animate_height, set_faded_visible
 from .select_field import SelectField
-from .table_model import FileRecordModel
+from .table_model import RECORD_ROLE, FileRecordModel
 from .tag_worker import TagWorker
 from .theme import apply_theme, palette_for, resolve_mode
 from .titlebar import FolderChip, TitleBar
@@ -218,21 +218,34 @@ def _restore_owned_dialog(owner: int, pid: int) -> None:
 
 
 class _TableView(QTableView):
-    """Table view that reports a left-button rubber-band selection as a drag.
+    """Table view where ticking is the only persistent selection state.
 
-    A plain click still only selects; once the mouse moves past the drag
-    threshold and is released, ``dragged`` fires carrying the model index the
-    drag started on. The window uses that anchor to decide check vs uncheck.
+    A plain click ticks/unticks the row. Dragging paints a transient preview
+    (blue for tick, a dashed outline for untick) and commits it on release;
+    the preview selection is cleared immediately afterwards. Keyboard
+    navigation moves the current row without changing any tick.
     """
 
     dragged = Signal(object)   # proxy index the drag started on (may be invalid)
+    dragPreviewChanged = Signal(bool, int)  # will tick?, rows in the preview
+    dragPreviewEnded = Signal()
     toggleRequested = Signal()
+
+    _NAV_KEYS = {
+        Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down,
+        Qt.Key.Key_Home, Qt.Key.Key_End, Qt.Key.Key_PageUp, Qt.Key.Key_PageDown,
+    }
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._press_pos = None
         self._press_index = QModelIndex()
+        self._click_modifiers = Qt.KeyboardModifier.NoModifier
         self._dragging = False
+        self._drag_target: bool | None = None
+        self._last_preview: tuple[bool, int] | None = None
+        self._cancel_drag = False
+        self._suppress_click = False
         self._hover_row = -1
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
@@ -243,43 +256,104 @@ class _TableView(QTableView):
         self._hover_row = row
         self.viewport().update()
 
+    def _drag_will_tick(self) -> bool:
+        if self._press_index.isValid():
+            record = self._press_index.data(RECORD_ROLE)
+            if record is not None:
+                return not record.checked
+        return True
+
+    def _emit_preview(self) -> None:
+        if not self._dragging or self._drag_target is None:
+            return
+        count = len(self.selectionModel().selectedRows())
+        state = (self._drag_target, count)
+        if state != self._last_preview:
+            self._last_preview = state
+            self.dragPreviewChanged.emit(self._drag_target, count)
+        self.viewport().update()
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self._press_pos = event.pos()
-            self._press_index = self.indexAt(event.pos())
+            pos = event.position().toPoint()
+            self._press_pos = pos
+            self._press_index = self.indexAt(pos)
+            self._click_modifiers = event.modifiers()
             self._dragging = False
+            self._drag_target = None
+            self._last_preview = None
+        self._cancel_drag = False
         super().mousePressEvent(event)
+        # Qt selects the row on press. Clear that immediately: selection is
+        # only used below as a transient drag preview.
+        if event.button() in (Qt.LeftButton, Qt.RightButton):
+            self.clearSelection()
 
     def mouseMoveEvent(self, event):
-        index = self.indexAt(event.pos())
+        pos = event.position().toPoint()
+        index = self.indexAt(pos)
         self._set_hover_row(index.row() if index.isValid() else -1)
+        super().mouseMoveEvent(event)
         if (self._press_pos is not None
                 and event.buttons() & Qt.LeftButton
-                and (event.pos() - self._press_pos).manhattanLength() >= QApplication.startDragDistance()):
-            self._dragging = True
-        super().mouseMoveEvent(event)
+                and (pos - self._press_pos).manhattanLength() >= QApplication.startDragDistance()):
+            if not self._dragging:
+                self._dragging = True
+                self._drag_target = self._drag_will_tick()
+            self._emit_preview()
 
     def mouseReleaseEvent(self, event):
         was_dragging = self._dragging
+        cancelled = self._cancel_drag
         press_index = self._press_index
         self._press_pos = None
         self._press_index = QModelIndex()
         self._dragging = False
+        self._drag_target = None
+        self._last_preview = None
+        # Qt may emit clicked while the mouse release is being handled.
+        self._suppress_click = was_dragging or cancelled
         super().mouseReleaseEvent(event)
-        if was_dragging and event.button() == Qt.LeftButton:
-            self.dragged.emit(press_index)
+        self._suppress_click = False
+        if was_dragging:
+            self.dragPreviewEnded.emit()
+            if not cancelled and event.button() == Qt.LeftButton:
+                self.dragged.emit(press_index)
+        if cancelled:
+            self.clearSelection()
+        self._cancel_drag = False
+        self.viewport().update()
 
     def leaveEvent(self, event):
         self._set_hover_row(-1)
         super().leaveEvent(event)
 
+    def clear_transient_selection(self) -> None:
+        """Drop the drag preview once the mouse interaction has finished."""
+        if self._press_pos is None and not self._dragging:
+            self.clearSelection()
+
     def keyPressEvent(self, event):
-        selection = self.selectionModel()
-        if event.key() == Qt.Key_Space and selection is not None and selection.hasSelection():
+        if event.key() == Qt.Key.Key_Escape and (self._press_pos is not None or self._dragging):
+            self._cancel_drag = True
+            self._press_pos = None
+            self._press_index = QModelIndex()
+            self._dragging = False
+            self._drag_target = None
+            self._last_preview = None
+            self.clearSelection()
+            self.dragPreviewEnded.emit()
+            self.viewport().update()
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_Space:
             self.toggleRequested.emit()
             event.accept()
             return
         super().keyPressEvent(event)
+        if event.key() in self._NAV_KEYS:
+            # Keep keyboard navigation from turning into a second selection.
+            self.clearSelection()
 
 
 class MainWindow(QMainWindow):
@@ -305,6 +379,8 @@ class MainWindow(QMainWindow):
             else "local"
         )
         self._first_run_checked = False
+        self._last_click_row: int | None = None
+        self._drag_status_before: str | None = None
 
         self.setWindowTitle("Media Filter")
         self.setWindowFlag(Qt.FramelessWindowHint, True)
@@ -722,11 +798,14 @@ class MainWindow(QMainWindow):
         self._view.horizontalHeader().sortIndicatorChanged.connect(self._on_header_sort_changed)
         self._model.checkedChanged.connect(self._refresh_stats)
         self._view.clicked.connect(self._on_clicked)
-        self._view.doubleClicked.connect(self._on_double_clicked)
         self._view.dragged.connect(self._on_drag_finished)
-        self._view.toggleRequested.connect(self._toggle_selected_checks)
+        self._view.dragPreviewChanged.connect(self._on_drag_preview)
+        self._view.dragPreviewEnded.connect(self._on_drag_preview_ended)
+        self._view.toggleRequested.connect(self._toggle_current_check)
         self._view.customContextMenuRequested.connect(self._show_context_menu)
         self._view.selectionModel().selectionChanged.connect(self._refresh_stats)
+        self._proxy.modelReset.connect(self._reset_click_anchor)
+        self._proxy.layoutChanged.connect(self._reset_click_anchor)
         self._view.installEventFilter(self)
 
     # -- i18n / theme ----------------------------------------------------
@@ -862,7 +941,10 @@ class MainWindow(QMainWindow):
     def _update_ai_button(self) -> None:
         running = self._tag_worker is not None and self._tag_worker.isRunning()
         self._ai.set_busy(running)
-        self._ai.set_mode(self._mode)
+        # A pick from the popover already set the pill and started its word
+        # fade; re-setting the same mode here would snap the text mid-fade.
+        if self._ai.mode() != self._mode:
+            self._ai.set_mode(self._mode)
         self._ai.setToolTip(self._tr("toolbar.ai_tip", mode=self._tr(
             f"mode.{self._mode}.name"
         )))
@@ -1487,14 +1569,30 @@ class MainWindow(QMainWindow):
         return sorted(set(rows))
 
     def _on_clicked(self, index) -> None:
-        # The checkbox column relies on an explicit toggle here: Qt's built-in
-        # auto-toggle does not fire for this custom model + proxy setup.
-        if index.column() == FileRecordModel.COL_CHECK:
-            self._model.toggle_check(self._proxy.mapToSource(index).row())
+        if self._view._suppress_click:
+            return
+        row = index.row()
+        source_row = self._proxy.mapToSource(index).row()
+        modifiers = self._view._click_modifiers
+        if modifiers & Qt.KeyboardModifier.ShiftModifier and self._last_click_row is not None:
+            target = not self._model.record(source_row).checked
+            self._model.set_checked(
+                self._source_rows_between(self._last_click_row, row), target,
+            )
+        else:
+            self._model.toggle_check(source_row)
+        self._last_click_row = row
+        self._view.clearSelection()
 
-    def _on_double_clicked(self, index) -> None:
-        src = self._proxy.mapToSource(index)
-        self._model.toggle_check(src.row())
+    def _source_rows_between(self, first: int, last: int) -> list[int]:
+        low, high = sorted((first, last))
+        return [
+            self._proxy.mapToSource(self._proxy.index(row, 0)).row()
+            for row in range(low, high + 1)
+        ]
+
+    def _reset_click_anchor(self) -> None:
+        self._last_click_row = None
 
     def _visible_source_rows(self) -> list[int]:
         """Source rows currently passing the filter (i.e. what the user sees)."""
@@ -1504,39 +1602,45 @@ class MainWindow(QMainWindow):
         ]
 
     def select_all(self) -> None:
-        # "Select all" ticks the checkboxes too: checking is what drives export
-        # and batch actions, so requiring a second click was surprising.
-        self._view.selectAll()
         self._model.set_checked(self._visible_source_rows(), True)
+        self._view.clearSelection()
 
     def deselect_all(self) -> None:
+        self._model.set_checked(list(range(self._model.rowCount())), False)
         self._view.clearSelection()
-        self._model.set_checked(self._visible_source_rows(), False)
-
-    def check_selected(self) -> None:
-        self._model.set_checked(self._selected_source_rows(), True)
-
-    def uncheck_selected(self) -> None:
-        self._model.set_checked(self._selected_source_rows(), False)
 
     def _on_drag_finished(self, proxy_index) -> None:
         rows = self._selected_source_rows()
         if not rows:
             return
         # Direction follows the anchor row the drag started on: dragging from
-        # an unchecked row checks the selection, from a checked row unchecks it.
-        # A drag that began on empty space (no anchor) defaults to checking.
+        # an unchecked row ticks the range, from a ticked row clears it.
         target = True
         if proxy_index is not None and proxy_index.isValid():
             src = self._proxy.mapToSource(proxy_index)
             target = not self._model.record(src.row()).checked
         self._model.set_checked(rows, target)
+        self._last_click_row = proxy_index.row() if proxy_index is not None and proxy_index.isValid() else None
+        self._view.clearSelection()
 
-    def _toggle_selected_checks(self) -> None:
-        rows = self._selected_source_rows()
-        if not rows:
+    def _on_drag_preview(self, will_tick: bool, count: int) -> None:
+        if self._drag_status_before is None:
+            self._drag_status_before = self._status_label.text()
+        key = "status.drag_check" if will_tick else "status.drag_uncheck"
+        self._set_status(self._tr(key, n=count))
+
+    def _on_drag_preview_ended(self) -> None:
+        if self._drag_status_before is not None:
+            self._set_status(self._drag_status_before)
+            self._drag_status_before = None
+
+    def _toggle_current_check(self) -> None:
+        index = self._view.currentIndex()
+        if not index.isValid():
             return
-        self._model.set_checked(rows, not self._model.record(rows[0]).checked)
+        self._model.toggle_check(self._proxy.mapToSource(index).row())
+        self._last_click_row = index.row()
+        self._view.clearSelection()
 
     def _refresh_stats(self) -> None:
         checked = self._model.checked_records()
@@ -1553,13 +1657,14 @@ class MainWindow(QMainWindow):
         )
         self._select_all_btn.setEnabled(bool(visible) and not all_checked)
         self._deselect_all_btn.setEnabled(bool(checked))
+        label = self._tr("toolbar.batch_process")
+        self._batch_btn.setText(f"{label} · {len(checked)}" if checked else label)
+        self._batch_btn.setEnabled(bool(checked))
+        self._export_btn.setEnabled(bool(checked))
+        self._view.clear_transient_selection()
 
     def _target_records(self):
-        records = self._model.checked_records()
-        if records:
-            return records
-        rows = self._selected_source_rows()
-        return [self._model.record(r) for r in rows]
+        return self._model.checked_records()
 
     # -- actions ---------------------------------------------------------
 
@@ -1716,14 +1821,16 @@ class MainWindow(QMainWindow):
 
     def _show_context_menu(self, pos) -> None:
         menu = QMenu(self)
-        rows = self._selected_source_rows()
-        has_sel = bool(rows)
+        index = self._view.indexAt(pos)
+        source_row = self._proxy.mapToSource(index).row() if index.isValid() else None
+        checked_rows = self._model.checked_rows()
+        has_row = source_row is not None
         has_rows = self._model.rowCount() > 0
 
         act_select_all = menu.addAction(self._tr("menu.select_all"))
         act_deselect_all = menu.addAction(self._tr("menu.deselect_all"))
-        act_check = menu.addAction(self._tr("menu.check_selected"))
-        act_uncheck = menu.addAction(self._tr("menu.uncheck_selected"))
+        act_check = menu.addAction(self._tr("menu.check_row"))
+        act_uncheck = menu.addAction(self._tr("menu.uncheck_row"))
         menu.addSeparator()
         act_open = menu.addAction(self._tr("menu.open"))
         act_reveal = menu.addAction(self._tr("menu.open_location"))
@@ -1732,11 +1839,13 @@ class MainWindow(QMainWindow):
         act_delete = menu.addAction(self._tr("menu.delete"))
 
         act_select_all.setEnabled(has_rows)
-        act_deselect_all.setEnabled(has_rows)
-        for a in (act_check, act_uncheck, act_open, act_reveal, act_copy, act_delete):
-            a.setEnabled(has_sel)
+        act_deselect_all.setEnabled(bool(checked_rows))
+        for action in (act_check, act_uncheck, act_open, act_reveal, act_copy):
+            action.setEnabled(has_row)
+        act_delete.setEnabled(bool(checked_rows))
 
         chosen = menu.exec(self._view.viewport().mapToGlobal(pos))
+        self._view.clearSelection()
         if chosen is None:
             return
         if chosen is act_select_all:
@@ -1744,22 +1853,32 @@ class MainWindow(QMainWindow):
         elif chosen is act_deselect_all:
             self.deselect_all()
         elif chosen is act_check:
-            self.check_selected()
+            if source_row is not None:
+                self._model.set_checked([source_row], True)
         elif chosen is act_uncheck:
-            self.uncheck_selected()
+            if source_row is not None:
+                self._model.set_checked([source_row], False)
         elif chosen is act_open:
-            self._open_path(self._model.record(rows[0]).path)
+            if source_row is not None:
+                self._open_path(self._model.record(source_row).path)
         elif chosen is act_reveal:
-            self._reveal(self._model.record(rows[0]).path)
+            if source_row is not None:
+                self._reveal(self._model.record(source_row).path)
         elif chosen is act_copy:
-            lines = [str(self._model.record(r).path) for r in rows]
-            QApplication.clipboard().setText("\n".join(lines))
-            self._set_status(self._tr("status.copied_paths", n=len(lines)))
+            if source_row is not None:
+                rows = (
+                    checked_rows
+                    if source_row in checked_rows and len(checked_rows) > 1
+                    else [source_row]
+                )
+                lines = [str(self._model.record(row).path) for row in rows]
+                QApplication.clipboard().setText("\n".join(lines))
+                self._set_status(self._tr("status.copied_paths", n=len(lines)))
         elif chosen is act_delete:
             self.delete_selected()
 
     def delete_selected(self) -> None:
-        rows = self._selected_source_rows()
+        rows = self._model.checked_rows()
         if not rows:
             return
         n = len(rows)
@@ -1790,6 +1909,7 @@ class MainWindow(QMainWindow):
                 logger.warning("delete failed for %s: %s", rec.path, exc)
         if deleted:
             self._model.remove_rows(deleted)
+            self._last_click_row = None
         self._refresh_stats()
         self._sync_empty_state()
         self._set_status(self._tr("status.deleted", n=len(deleted), failed=failed))

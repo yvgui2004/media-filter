@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Ticking is now the table's only persistent selection state. Clicking a row
+  ticks it; dragging shows a transient preview (blue for tick, a dashed
+  outline for untick), commits on release and clears the highlight. Batch
+  processing and export use ticks only, show the tick count, and are disabled
+  when nothing is ticked.
+- The AI mode popover now lands from the caret with a 170ms rise, three cards
+  fading in 20ms apart and the 8-cell upload strips sweeping in lockstep.
+  Picking a mode pulses the chosen card, swaps the mode word with a fade and
+  retracts in 100ms after a short confirmation beat; the caret rotates
+  instead of swapping icons. The hybrid-without-labels warning unfolds by
+  height instead of popping the menu taller.
+- The context menu acts on the row under the cursor without changing ticks;
+  "Clear Ticks" clears every tick, including files hidden by filters.
 - Portable packages now include `LICENSE` and `THIRD_PARTY_NOTICES.md`; the
   FFmpeg notice names the pinned BtbN build and links its exact source commit
   and build scripts.
@@ -16,6 +29,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The AI mode popover now matches the design prototype's layout: 73px cards,
+  a 35px header with the legend packed at the prototype's 5px gaps, a 24px
+  warning row instead of 36px, full-height scope strips, the sliders icon and
+  12px chevrons in the footer, and the prototype's wording (本地, 仅匹配,
+  回退本地).
 - The batch dialog's 高级选项 row could not be opened: the click target was an
   empty layout beside the actual disclosure row, so it had no size and never
   received a click. The row now wraps the line, chevron, title and summary and

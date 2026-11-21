@@ -28,7 +28,10 @@ def _pen(color: QColor, width: float = 1.7) -> QPen:
     return pen
 
 
-def _draw(p: QPainter, name: str, color: QColor, weight: float = 1.7) -> None:
+def _draw(
+    p: QPainter, name: str, color: QColor, weight: float = 1.7,
+    fill: QColor | None = None,
+) -> None:
     p.setPen(_pen(color, weight))
     p.setBrush(Qt.NoBrush)
 
@@ -159,6 +162,17 @@ def _draw(p: QPainter, name: str, color: QColor, weight: float = 1.7) -> None:
                 QPointF(12 + outer[0], 12 + outer[1]),
             )
 
+    elif name == "sliders":
+        # Three rails with a knob on each; the menu's "recognition settings"
+        # link uses this instead of the gear so it reads as tuning, not a page.
+        p.drawLine(QPointF(3.5, 6.6), QPointF(20.5, 6.6))
+        p.drawLine(QPointF(3.5, 12), QPointF(20.5, 12))
+        p.drawLine(QPointF(3.5, 17.4), QPointF(20.5, 17.4))
+        if fill is not None:
+            p.setBrush(fill)
+        for cx, cy in ((8.4, 6.6), (15.6, 12), (9.6, 17.4)):
+            p.drawEllipse(QPointF(cx, cy), 2.25, 2.25)
+
     elif name == "eye":
         path = QPainterPath()
         path.moveTo(3, 12)
@@ -194,7 +208,8 @@ def _draw(p: QPainter, name: str, color: QColor, weight: float = 1.7) -> None:
 
 
 def line_icon(
-    name: str, color: str, size: int = 18, weight: float = 1.7
+    name: str, color: str, size: int = 18, weight: float = 1.7,
+    fill: str | None = None,
 ) -> QIcon:
     """Return a crisply rendered icon at the screen's actual pixel ratio.
 
@@ -212,7 +227,7 @@ def line_icon(
     p = QPainter(pm)
     p.setRenderHint(QPainter.Antialiasing, True)
     p.scale(size / 24.0, size / 24.0)
-    _draw(p, name, QColor(color), weight)
+    _draw(p, name, QColor(color), weight, QColor(fill) if fill else None)
     p.end()
     return QIcon(pm)
 

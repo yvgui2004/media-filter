@@ -6,10 +6,11 @@ from collections.abc import Callable
 from urllib.parse import urlparse
 
 from PySide6.QtCore import (
-    QEasingCurve, QPoint, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal,
+    QAbstractAnimation, QEasingCurve, QParallelAnimationGroup, QPoint, QPointF,
+    QPropertyAnimation, QRect, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal,
 )
 from PySide6.QtGui import (
-    QFont, QFontMetrics, QGuiApplication, QPainter, QPen,
+    QColor, QFont, QFontMetrics, QGuiApplication, QPainter, QPen,
 )
 from PySide6.QtWidgets import (
     QAbstractButton, QDialog, QFrame, QGraphicsOpacityEffect, QHBoxLayout,
@@ -18,7 +19,7 @@ from PySide6.QtWidgets import (
 
 from ..dialog_base import AppDialog, dialog_button
 from ..icons import line_icon
-from ..motion import FAST, animations_enabled, rise_popup
+from ..motion import animations_enabled, fade_widget, rise_popup
 from ..tokens import LIGHT, parse_color
 from .flow_layout import FlowLayout
 from .mode_widgets import MODES, mode_text
@@ -89,6 +90,19 @@ class _AiMain(QPushButton):
     def set_icon(self, name: str, color: str) -> None:
         self.icon_label.setPixmap(line_icon(name, color, 14).pixmap(14, 14))
 
+    def swap_chip(self, text: str) -> None:
+        """Let the mode word hand over instead of snapping mid-menu."""
+        if self.chip.text() == text:
+            return
+        if not animations_enabled():
+            self.chip.setText(text)
+            return
+        fade_widget(self.chip, 1.0, 0.0, 70, on_done=lambda: self._swap_chip_in(text))
+
+    def _swap_chip_in(self, text: str) -> None:
+        self.chip.setText(text)
+        fade_widget(self.chip, 0.0, 1.0, 110)
+
     def sizeHint(self) -> QSize:
         layout = self.layout()
         hint = layout.sizeHint() if layout is not None else super().sizeHint()
@@ -101,6 +115,8 @@ class _AiCaret(QPushButton):
         self._tokens = tokens
         self._open = False
         self._hover = False
+        self._angle = 0.0
+        self._rot_anim: QVariantAnimation | None = None
         self.setObjectName("AiCaret")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedSize(26, 32)
@@ -111,7 +127,7 @@ class _AiCaret(QPushButton):
             return
         self._open = open_
         self._sync_bg()
-        self._apply_icon()
+        self._animate_angle(180.0 if open_ else 0.0)
 
     def enterEvent(self, event) -> None:
         self._hover = True
@@ -141,12 +157,50 @@ class _AiCaret(QPushButton):
         )
 
     def _apply_icon(self) -> None:
-        # The caret stays quiet (ink_3) until it is hovered or the menu is open.
+        # The chevron is painted by paintEvent so it can rotate between the
+        # down and up states instead of swapping icons on a single frame.
+        self.update()
+
+    def _animate_angle(self, target: float) -> None:
+        if self._rot_anim is not None:
+            self._rot_anim.stop()
+            self._rot_anim = None
+        if not animations_enabled():
+            self._set_angle(target)
+            return
+        start = self._angle
+        if abs(start - target) < 0.1:
+            return
+        anim = QVariantAnimation(self)
+        anim.setDuration(170)
+        anim.setStartValue(start)
+        anim.setEndValue(target)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.valueChanged.connect(self._set_angle)
+        anim.finished.connect(lambda: self._set_angle(target))
+        anim.start()
+        self._rot_anim = anim
+
+    def _set_angle(self, value) -> None:
+        self._angle = float(value)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
         active = self._hover or self._open
-        color = self._tokens["accent"] if active else self._tokens["ink_3"]
-        name = "chevron-up" if self._open else "chevron-down"
-        self.setIcon(line_icon(name, color, 12, weight=2.2))
-        self.setIconSize(QSize(12, 12))
+        color = QColor(self._tokens["accent"] if active else self._tokens["ink_3"])
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.translate(self.width() / 2.0, self.height() / 2.0)
+        painter.rotate(self._angle)
+        painter.scale(12.0 / 24.0, 12.0 / 24.0)
+        painter.translate(-12.0, -12.0)
+        pen = QPen(color, 2.2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.drawPolyline([QPointF(6, 9), QPointF(12, 15), QPointF(18, 9)])
+        painter.end()
 
 
 class AiModeSwitch(QWidget):
@@ -172,6 +226,11 @@ class AiModeSwitch(QWidget):
         self._suppress_timer.setSingleShot(True)
         self._suppress_timer.setInterval(220)
         self._suppress_timer.timeout.connect(self._clear_suppress)
+        # A picked card confirms in place for a beat before the menu retracts.
+        self._dismiss_timer = QTimer(self)
+        self._dismiss_timer.setSingleShot(True)
+        self._dismiss_timer.setInterval(190)
+        self._dismiss_timer.timeout.connect(self._dismiss_popover)
 
         self.setObjectName("AiSwitch")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -241,11 +300,15 @@ class AiModeSwitch(QWidget):
     def mode(self) -> str:
         return self._mode
 
-    def set_mode(self, mode: str) -> None:
+    def set_mode(self, mode: str, animate: bool = False) -> None:
         if mode not in MODES:
             mode = "local"
         self._mode = mode
-        self.main.chip.setText(mode_text(self._tr, mode))
+        text = mode_text(self._tr, mode)
+        if animate:
+            self.main.swap_chip(text)
+        else:
+            self.main.chip.setText(text)
         if self._popover is not None:
             self._popover.set_mode(mode)
 
@@ -262,6 +325,7 @@ class AiModeSwitch(QWidget):
         self._sync_shell()
         self._set_pulsing(busy)
         if busy and self._popover is not None:
+            self._dismiss_timer.stop()
             self._popover.close()
 
     def _set_pulsing(self, on: bool) -> None:
@@ -321,7 +385,11 @@ class AiModeSwitch(QWidget):
             self._suppress_open = False
             return
         if self._popover is not None and self._popover.isVisible():
-            self._popover.close()
+            self._dismiss_timer.stop()
+            self._menu_open = False
+            self.caret.set_open(False)
+            self._sync_shell()
+            self._popover.dismiss()
             return
         pop = ModePopover(self._tr, self._tokens, self._tags_count)
         pop.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
@@ -346,9 +414,10 @@ class AiModeSwitch(QWidget):
         self.caret.set_open(True)
         self._sync_shell()
         pop.show()
-        rise_popup(pop, pos)
+        rise_popup(pop, pos, rise=7, duration=170)
 
     def _on_popover_closed(self) -> None:
+        self._dismiss_timer.stop()
         self._suppress_open = True
         self._suppress_timer.start()
         self._menu_open = False
@@ -362,16 +431,28 @@ class AiModeSwitch(QWidget):
         if self._popover is pop:
             self._popover = None
 
-    def _on_mode_picked(self, mode: str) -> None:
-        self.set_mode(mode)
-        self.modeChanged.emit(mode)
+    def _dismiss_popover(self) -> None:
         if self._popover is not None:
-            # Hybrid without labels needs its warning read before the menu goes
-            # away; every other pick can dismiss immediately like a menu.
-            if mode == "hybrid" and self._tags_count == 0:
-                self._popover.set_mode(mode)
-            else:
-                self._popover.close()
+            self._menu_open = False
+            self.caret.set_open(False)
+            self._sync_shell()
+            self._popover.dismiss()
+
+    def _on_mode_picked(self, mode: str) -> None:
+        self.set_mode(mode, animate=True)
+        self.modeChanged.emit(mode)
+        pop = self._popover
+        if pop is None:
+            return
+        pop.confirm(mode)
+        # Hybrid without labels needs its warning read before the menu goes
+        # away; every other pick confirms in place for a beat, then retracts.
+        if mode == "hybrid" and self._tags_count == 0:
+            self._dismiss_timer.stop()
+        elif animations_enabled():
+            self._dismiss_timer.start()
+        else:
+            pop.dismiss()
 
     def _on_tags(self) -> None:
         self.tagsRequested.emit()
@@ -402,6 +483,11 @@ class _FrameStrip(QWidget):
         self._tokens = tokens
         self._uploaded = max(0, min(_STRIP_CELLS, uploaded))
         self._active = True
+        self._sweep_t = 1.0
+        self._sweep_anim: QVariantAnimation | None = None
+        self._sweep_timer = QTimer(self)
+        self._sweep_timer.setSingleShot(True)
+        self._sweep_timer.timeout.connect(self._run_sweep)
         self.setFixedHeight(7)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
@@ -421,6 +507,33 @@ class _FrameStrip(QWidget):
         self._tokens = tokens
         self.update()
 
+    def sweep(self, delay: int = 0) -> None:
+        """Reveal the eight cells left to right, as a scope scan."""
+        self._sweep_timer.stop()
+        if not animations_enabled():
+            self._sweep_t = 1.0
+            self.update()
+            return
+        self._sweep_t = 0.0
+        self.update()
+        self._sweep_timer.start(max(0, delay))
+
+    def _run_sweep(self) -> None:
+        if self._sweep_anim is not None:
+            self._sweep_anim.stop()
+        anim = QVariantAnimation(self)
+        anim.setDuration(260)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.valueChanged.connect(self._set_sweep)
+        anim.start()
+        self._sweep_anim = anim
+
+    def _set_sweep(self, value) -> None:
+        self._sweep_t = float(value)
+        self.update()
+
     def paintEvent(self, _event) -> None:
         width = self.width()
         if width <= 0:
@@ -432,7 +545,15 @@ class _FrameStrip(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         for index in range(_STRIP_CELLS):
-            rect = QRectF(index * (cell + gap), 0.5, cell, 6.0)
+            reveal = 1.0
+            if self._sweep_t < 1.0:
+                reveal = max(
+                    0.0, min(1.0, (self._sweep_t - index * 0.075) / 0.45)
+                )
+            height = 7.0 * (0.35 + 0.65 * reveal)
+            top = (7.0 - height) / 2.0
+            x = index * (cell + gap)
+            painter.setOpacity(0.10 + 0.90 * reveal)
             if index < self._uploaded:
                 color = (
                     self._tokens["accent"] if self._active
@@ -440,11 +561,16 @@ class _FrameStrip(QWidget):
                 )
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(parse_color(color))
+                rect = QRectF(x, top, cell, height)
             else:
                 painter.setPen(
                     QPen(parse_color(self._tokens["line_strong"]), 1)
                 )
                 painter.setBrush(parse_color(self._tokens["sunken"]))
+                rect = QRectF(
+                    x + 0.5, top + 0.5, max(1.0, cell - 1.0),
+                    max(1.0, height - 1.0),
+                )
             painter.drawRoundedRect(rect, 2, 2)
         painter.end()
 
@@ -459,10 +585,15 @@ class _PopoverModeCard(QAbstractButton):
         self._tr = tr
         self._tokens = tokens
         self._hover = False
+        self._pulse_t = 1.0
+        self._pulse_anim: QVariantAnimation | None = None
         self.setCheckable(True)
         self.setAutoExclusive(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        # Fixed rather than hint-driven: the wrapped description's hint assumes
+        # its narrow preferred width and would make every card 12px too tall.
+        self.setFixedHeight(73)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 9, 11, 10)
@@ -488,6 +619,10 @@ class _PopoverModeCard(QAbstractButton):
         layout.addSpacing(6)
         self.desc = _transparent(QLabel(tr(f"mode.{mode}.popover")))
         self.desc.setWordWrap(True)
+        self.desc.setFixedHeight(16)
+        self.desc.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         layout.addWidget(self.desc)
 
         self._apply_styles()
@@ -499,7 +634,7 @@ class _PopoverModeCard(QAbstractButton):
     def _apply_styles(self) -> None:
         t = self._tokens
         self.title.setStyleSheet(
-            f"font-size: 13px; font-weight: 600; color: {t['ink']}; "
+            f"font-size: 13px; font-weight: 650; color: {t['ink']}; "
             "background: transparent;"
         )
         self.desc.setStyleSheet(
@@ -507,12 +642,18 @@ class _PopoverModeCard(QAbstractButton):
         )
         if self.badge is not None:
             self.badge.setStyleSheet(
-                "font-size: 9px; font-weight: 600; color: %s; background: %s; "
-                "border: 1px solid %s; border-radius: 8px; padding: 0 5px;"
+                "font-size: 9px; font-weight: 650; color: %s; background: %s; "
+                "border: 1px solid %s; border-radius: 8px;"
                 % (t["accent"], t["accent_soft"],
                    _mix(t["surface"], t["accent"], 0.26))
             )
             self.badge.setFixedHeight(16)
+            self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.badge.ensurePolished()
+            fm = QFontMetrics(self.badge.font())
+            self.badge.setFixedWidth(
+                fm.horizontalAdvance(self.badge.text()) + 12
+            )
         self._sync()
 
     def retranslate(self, tr) -> None:
@@ -522,6 +663,11 @@ class _PopoverModeCard(QAbstractButton):
         self.scope.setText(tr(f"mode.scope_{self._mode}"))
         if self.badge is not None:
             self.badge.setText(tr("mode.recommended"))
+            self.badge.ensurePolished()
+            fm = QFontMetrics(self.badge.font())
+            self.badge.setFixedWidth(
+                fm.horizontalAdvance(self.badge.text()) + 12
+            )
 
     def set_tokens(self, tokens: dict[str, str]) -> None:
         self._tokens = tokens
@@ -543,7 +689,7 @@ class _PopoverModeCard(QAbstractButton):
         checked = self.isChecked()
         color = self._tokens["accent"] if checked else self._tokens["ink_3"]
         self.scope.setStyleSheet(
-            f"font-size: 10px; font-weight: 600; color: {color}; "
+            f"font-size: 10px; font-weight: 650; color: {color}; "
             "background: transparent;"
         )
         self.strip.set_active(checked)
@@ -551,6 +697,27 @@ class _PopoverModeCard(QAbstractButton):
 
     def checkStateSet(self) -> None:  # noqa: N802
         self._sync()
+
+    def pulse(self) -> None:
+        """One inward ring after a pick: confirmation without a toast."""
+        if not animations_enabled():
+            return
+        if self._pulse_anim is not None:
+            self._pulse_anim.stop()
+        anim = QVariantAnimation(self)
+        anim.setDuration(300)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.valueChanged.connect(self._set_pulse)
+        self._pulse_t = 0.0
+        self.update()
+        anim.start()
+        self._pulse_anim = anim
+
+    def _set_pulse(self, value) -> None:
+        self._pulse_t = float(value)
+        self.update()
 
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
@@ -561,11 +728,26 @@ class _PopoverModeCard(QAbstractButton):
             painter.setBrush(parse_color(self._tokens["accent_soft"]))
         elif self._hover:
             painter.setPen(QPen(parse_color(self._tokens["line_strong"]), 1))
-            painter.setBrush(parse_color(self._tokens["hover_strong"]))
+            painter.setBrush(
+                parse_color(
+                    _mix(self._tokens["surface"], self._tokens["ink"], 0.03)
+                )
+            )
         else:
             painter.setPen(QPen(parse_color(self._tokens["line"]), 1))
             painter.setBrush(parse_color(self._tokens["surface"]))
         painter.drawRoundedRect(rect, 9, 9)
+        if self._pulse_t < 1.0:
+            t = self._pulse_t
+            inset = 1.0 + 5.0 * t
+            ring = QColor(parse_color(self._tokens["accent"]))
+            ring.setAlphaF(max(0.0, 0.32 * (1.0 - t)))
+            painter.setPen(QPen(ring, 1.4))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            radius = max(2.0, 9.0 - inset)
+            painter.drawRoundedRect(
+                rect.adjusted(inset, inset, -inset, -inset), radius, radius
+            )
         painter.end()
 
 
@@ -585,7 +767,10 @@ class _PopLink(QAbstractButton):
         row.setSpacing(7)
         self._icon = _transparent(QLabel())
         self._icon.setFixedSize(15, 15)
-        self._icon.setPixmap(line_icon(icon, tokens["ink_3"], 15).pixmap(15, 15))
+        self._icon.setPixmap(
+            line_icon(icon, tokens["ink_3"], 15, 1.9,
+                      fill=tokens["surface"]).pixmap(15, 15)
+        )
         row.addWidget(self._icon)
         self._text = _transparent(QLabel(text))
         row.addWidget(self._text)
@@ -593,10 +778,11 @@ class _PopLink(QAbstractButton):
         self.count = _transparent(QLabel(""))
         row.addWidget(self.count)
         self.chev = _transparent(QLabel())
-        self.chev.setFixedSize(14, 14)
+        self.chev.setFixedSize(12, 12)
         if with_chevron:
             self.chev.setPixmap(
-                line_icon("chevron-right", tokens["ink_3"], 14).pixmap(14, 14)
+                line_icon("chevron-right", tokens["ink_3"], 12, 2.4)
+                .pixmap(12, 12)
             )
             row.addWidget(self.chev)
         self._apply_styles()
@@ -616,11 +802,13 @@ class _PopLink(QAbstractButton):
     def set_tokens(self, tokens: dict[str, str]) -> None:
         self._tokens = tokens
         self._icon.setPixmap(
-            line_icon(self._icon_name, tokens["ink_3"], 15).pixmap(15, 15)
+            line_icon(self._icon_name, tokens["ink_3"], 15, 1.9,
+                      fill=tokens["surface"]).pixmap(15, 15)
         )
         if self._with_chevron:
             self.chev.setPixmap(
-                line_icon("chevron-right", tokens["ink_3"], 14).pixmap(14, 14)
+                line_icon("chevron-right", tokens["ink_3"], 12, 2.4)
+                .pixmap(12, 12)
             )
         self._apply_styles()
         self.update()
@@ -665,28 +853,42 @@ class ModePopover(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
         self.setFixedWidth(360)
         self._apply_shell()
+        self._reveal_timers: list[QTimer] = []
+        self._dismissing = False
+        self._dismiss_anim: QParallelAnimationGroup | None = None
+        self._warning_shown = False
+        self._warning_anim: QVariantAnimation | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(0)
 
         head = QWidget()
+        self._head = head
+        head.setFixedHeight(35)
         head_layout = QHBoxLayout(head)
         head_layout.setContentsMargins(8, 8, 10, 10)
         head_layout.setSpacing(8)
         self._head_title = QLabel(tr("mode.popover_scope_title"))
         head_layout.addWidget(self._head_title)
         head_layout.addStretch(1)
+        legend = QHBoxLayout()
+        legend.setContentsMargins(0, 0, 0, 0)
+        legend.setSpacing(5)
         self._legend_local = QLabel()
         self._legend_local.setFixedSize(9, 9)
-        head_layout.addWidget(self._legend_local)
+        legend.addWidget(self._legend_local)
         self._legend_local_text = QLabel(tr("mode.popover_legend_local"))
-        head_layout.addWidget(self._legend_local_text)
+        legend.addWidget(self._legend_local_text)
+        # QHBoxLayout already inserts 5px on each side of a spacer item, so
+        # 7px here yields the prototype's 12px break between the two groups.
+        legend.addSpacing(7)
         self._legend_cloud = QLabel()
         self._legend_cloud.setFixedSize(9, 9)
-        head_layout.addWidget(self._legend_cloud)
+        legend.addWidget(self._legend_cloud)
         self._legend_cloud_text = QLabel(tr("mode.popover_legend_cloud"))
-        head_layout.addWidget(self._legend_cloud_text)
+        legend.addWidget(self._legend_cloud_text)
+        head_layout.addLayout(legend)
         layout.addWidget(head)
 
         self._cards_box = QWidget()
@@ -703,6 +905,7 @@ class ModePopover(QFrame):
 
         self.warning = QLabel(tr("mode.popover_need_labels"))
         self.warning.setWordWrap(True)
+        self.warning.setContentsMargins(14, 8, 14, 0)
         self.warning.setVisible(False)
         layout.addWidget(self.warning)
 
@@ -712,6 +915,8 @@ class ModePopover(QFrame):
         layout.addWidget(self._rule)
 
         util = QWidget()
+        self._util = util
+        util.setFixedHeight(36)
         util_layout = QHBoxLayout(util)
         util_layout.setContentsMargins(4, 4, 4, 2)
         util_layout.setSpacing(2)
@@ -721,7 +926,8 @@ class ModePopover(QFrame):
         self.tags_link.clicked.connect(self._pick_tags)
         util_layout.addWidget(self.tags_link, 1)
         self.settings_link = _PopLink(
-            "settings", tr("mode.settings"), tokens, with_chevron=True, parent=self
+            "sliders", tr("mode.settings"), tokens, with_chevron=True,
+            parent=self,
         )
         self.settings_link.clicked.connect(self._pick_settings)
         util_layout.addWidget(self.settings_link, 1)
@@ -743,7 +949,7 @@ class ModePopover(QFrame):
         t = self._tokens
         self._apply_shell()
         self._head_title.setStyleSheet(
-            f"font-size: 13px; font-weight: 600; color: {t['ink']}; "
+            f"font-size: 13px; font-weight: 650; color: {t['ink']}; "
             "background: transparent;"
         )
         for label in (
@@ -760,8 +966,7 @@ class ModePopover(QFrame):
             f"background: {t['accent']}; border: none; border-radius: 2px;"
         )
         self.warning.setStyleSheet(
-            f"padding: 8px 14px 0 14px; color: {t['red']}; font-size: 11px; "
-            "background: transparent;"
+            f"color: {t['red']}; font-size: 11px; background: transparent;"
         )
         self._rule.setStyleSheet(f"background: {t['line']}; border: none;")
         for card in self.cards.values():
@@ -776,16 +981,172 @@ class ModePopover(QFrame):
 
     def _sync_warning(self) -> None:
         show = self._mode == "hybrid" and self._tags_count == 0
-        self.warning.setVisible(show)
+        if show == self._warning_shown:
+            return
+        self._warning_shown = show
+        self._animate_warning(show, animate=self.isVisible())
+
+    def _warning_target_height(self) -> int:
+        # 360-wide popover: 1px border + 6px padding each side, then the
+        # label's 14px insets. Measure the wrapped line box instead of trusting
+        # QLabel's hint, which also counts the frame and reports 36px.
+        width = max(40, self.width() - 2 - 12 - 28)
+        fm = self.warning.fontMetrics()
+        rect = fm.boundingRect(
+            QRect(0, 0, width, 10000),
+            Qt.TextFlag.TextWordWrap,
+            self.warning.text(),
+        )
+        lines = max(1, round(rect.height() / max(1, fm.height())))
+        return 8 + lines * 16
+
+    def _animate_warning(self, show: bool, animate: bool) -> None:
+        if self._warning_anim is not None:
+            self._warning_anim.stop()
+            self._warning_anim = None
+        if not animate or not animations_enabled():
+            self.warning.setVisible(show)
+            if show:
+                self.warning.setFixedHeight(self._warning_target_height())
+            else:
+                self.warning.setMinimumHeight(0)
+                self.warning.setMaximumHeight(16777215)
+            self._settle_size()
+            return
+        start = self.warning.height() if self.warning.isVisible() else 0
+        self.warning.ensurePolished()
+        self.warning.setVisible(True)
+        target = self._warning_target_height() if show else 0
+        if start == target:
+            self.warning.setMinimumHeight(0)
+            self.warning.setMaximumHeight(16777215)
+            if not show:
+                self.warning.setVisible(False)
+            else:
+                self.warning.setFixedHeight(target)
+            self._settle_size()
+            return
+        self.warning.setMinimumHeight(0)
+        self.warning.setMaximumHeight(16777215)
+        self.warning.setFixedHeight(start)
+        anim = QVariantAnimation(self)
+        anim.setDuration(180)
+        anim.setStartValue(float(start))
+        anim.setEndValue(float(target))
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.valueChanged.connect(self._step_warning)
+        anim.finished.connect(lambda: self._finish_warning(show, target))
+        anim.start()
+        self._warning_anim = anim
+
+    def _step_warning(self, value) -> None:
+        self.warning.setFixedHeight(int(round(float(value))))
+        self._settle_size()
+
+    def _finish_warning(self, show: bool, target: int) -> None:
+        if not show:
+            self.warning.setVisible(False)
+        self.warning.setMinimumHeight(0)
+        self.warning.setMaximumHeight(16777215)
+        if show:
+            self.warning.setFixedHeight(target)
+        self._settle_size()
+
+    def _settle_size(self) -> None:
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
         if self.isVisible():
-            layout = self.layout()
-            if layout is not None:
-                layout.activate()
             self.adjustSize()
+
+    # -- open / close motion ---------------------------------------------
+
+    def _after(self, delay: int, callback) -> None:
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(callback)
+        timer.start(delay)
+        self._reveal_timers.append(timer)
+
+    def _stop_reveal_timers(self) -> None:
+        for timer in self._reveal_timers:
+            timer.stop()
+        self._reveal_timers.clear()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._play_open()
+
+    def _play_open(self) -> None:
+        cards = list(self.cards.values())
+        if not animations_enabled():
+            for card in cards:
+                card.strip.sweep(0)
+            return
+        for widget in (self._head, *cards, self._util):
+            fade_widget(widget, 0.0, 0.0, 0)
+        if self._warning_shown:
+            fade_widget(self.warning, 0.0, 0.0, 0)
+        self._after(16, lambda: fade_widget(self._head, 0.0, 1.0, 110))
+        for index, card in enumerate(cards):
+            self._after(
+                32 + index * 20,
+                lambda c=card: fade_widget(c, 0.0, 1.0, 130),
+            )
+        # The three strips sweep on the same tick so 0 / 3 / 8 reads as one
+        # comparison rather than three separate animations.
+        self._after(92, lambda: [card.strip.sweep() for card in cards])
+        self._after(120, lambda: fade_widget(self._util, 0.0, 1.0, 120))
+        if self._warning_shown:
+            self._after(110, lambda: fade_widget(self.warning, 0.0, 1.0, 120))
+
+    def dismiss(self) -> None:
+        """Retract faster than it arrived, then close for real."""
+        if self._dismissing:
+            return
+        self._dismissing = True
+        self._stop_reveal_timers()
+        if not animations_enabled():
+            self.close()
+            return
+        pending = getattr(self, "_mf_window_fade", None)
+        if isinstance(pending, QAbstractAnimation):
+            try:
+                pending.stop()
+            except RuntimeError:
+                pass
+        start = self.pos()
+        fade = QPropertyAnimation(self, b"windowOpacity", self)
+        fade.setDuration(100)
+        fade.setStartValue(max(0.0, self.windowOpacity()))
+        fade.setEndValue(0.0)
+        fade.setEasingCurve(QEasingCurve.Type.InCubic)
+        move = QPropertyAnimation(self, b"pos", self)
+        move.setDuration(100)
+        move.setStartValue(start)
+        move.setEndValue(start + QPoint(0, 4))
+        move.setEasingCurve(QEasingCurve.Type.InCubic)
+        group = QParallelAnimationGroup(self)
+        group.addAnimation(fade)
+        group.addAnimation(move)
+        group.finished.connect(self.close)
+        self._dismiss_anim = group
+        group.start()
+
+    def confirm(self, mode: str) -> None:
+        card = self.cards.get(mode)
+        if card is None:
+            return
+        card.pulse()
+        card.strip.sweep()
 
     def hideEvent(self, event) -> None:
         # Fires for a picked row, a click outside and Esc alike: the caret
         # only points up while the menu is actually on screen.
+        self._stop_reveal_timers()
+        if self._warning_anim is not None:
+            self._warning_anim.stop()
+            self._warning_anim = None
         super().hideEvent(event)
         self.closed.emit()
 

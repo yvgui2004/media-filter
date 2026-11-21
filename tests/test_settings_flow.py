@@ -223,6 +223,8 @@ def test_my_tags_enter_confirms_the_tag_not_import(qt_app, tr):
         assert dlg.isVisible()  # Enter did not press 保存 and close the dialog
     finally:
         dlg.close()
+        dlg.deleteLater()
+        qt_app.processEvents()
 
 
 def test_my_tags_adds_and_caps(qt_app, tr):

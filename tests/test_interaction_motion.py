@@ -169,8 +169,13 @@ def test_popover_explains_empty_tags_in_hybrid_mode(qt_app):
         pop.close()
 
 
-def test_popover_stays_open_only_for_hybrid_without_labels(qt_app):
+def test_popover_stays_open_only_for_hybrid_without_labels(qt_app, monkeypatch):
     assert qt_app is not None
+    # Keep the retract immediate: this test is about which picks close the
+    # menu, not the confirmation beat before it animates away.
+    monkeypatch.setattr(
+        "mediafilter.ui.widgets.mode_switch.animations_enabled", lambda: False
+    )
     switch = AiModeSwitch(lambda key, **_: key, LIGHT)
     switch.set_custom_count(0)
     switch._toggle_popover()
