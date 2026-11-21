@@ -1,11 +1,11 @@
 {
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Local-first AI video organizer for Windows: auto-tag clips with YOLOv8, filter by content, batch FFmpeg.",
   "homepage": "https://github.com/yvgui2004/media-filter",
   "license": "MIT",
-  "url": "https://github.com/yvgui2004/media-filter/releases/download/v0.1.1/MediaFilter-0.1.1-win64.zip",
-  "hash": "0b7ba87ef9878f2bd20b512af92fdcc6949f4585551b01d1ca1eeb32e1cfd664",
-  "extract_dir": "MediaFilter-0.1.1-win64",
+  "url": "https://github.com/yvgui2004/media-filter/releases/download/v0.2.0/MediaFilter-0.2.0-win64.zip",
+  "hash": "211331abec823fd7559e27033922557a5640444f23d75650a02900830d929566",
+  "extract_dir": "MediaFilter-0.2.0-win64",
   "bin": "MediaFilter.exe",
   "shortcuts": [
     ["MediaFilter.exe", "Media Filter"]
