@@ -81,13 +81,14 @@ class _MenuDelegate(QStyledItemDelegate):
         index: QModelIndex | QPersistentModelIndex,
     ) -> None:
         tokens = self._tokens
-        menu = self.parent()
-        entry = menu.entry_at(index.row()) if isinstance(menu, _MenuList) else None
+        owner = self.parent()
+        menu = owner if isinstance(owner, _MenuList) else None
+        entry = menu.entry_at(index.row()) if menu is not None else None
         rect = QRectF(option.rect)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        if entry is None:
+        if entry is None or menu is None:
             painter.restore()
             return
 
