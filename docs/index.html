@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Media Filter — Local-first AI video organizer for Windows</title>
-  <meta name="description" content="Scan a folder, auto-tag video and audio with local YOLOv8 or a cloud model, filter by content, and turn selections into batch FFmpeg commands. Portable Windows app.">
+  <meta name="description" content="Scan a folder, auto-tag video and audio locally on GPU or CPU, filter by content, then remux, compress or run your own FFmpeg command. Portable Windows app.">
   <meta property="og:title" content="Media Filter — Local-first AI video organizer">
-  <meta property="og:description" content="Auto-tag your footage locally, filter by what is in the shot, and batch-transcode with FFmpeg.">
+  <meta property="og:description" content="GPU-accelerated local tagging, custom labels, and one batch dialog for remux, NVENC/AMF compression or your own FFmpeg command.">
   <meta property="og:image" content="https://yvgui2004.github.io/media-filter/screenshots/main-light.png">
   <meta property="og:url" content="https://yvgui2004.github.io/media-filter/">
   <meta property="og:type" content="website">
@@ -157,11 +157,11 @@
   <main id="top">
     <div class="wrap">
       <div class="hero">
-        <span class="eyebrow">Windows 10 / 11 · Local-first · Portable</span>
+        <span class="eyebrow">Windows 10 / 11 · Local-first · GPU-accelerated</span>
         <h1 class="en">Find the clip you need <em>by what's in it.</em></h1>
         <h1 class="zh">按画面内容，<em>找到你要的那条素材。</em></h1>
-        <p class="lede en">Scan a folder, tag every video and audio file with local AI or a cloud model, filter by content, then turn the selection into batch FFmpeg commands — no upload, no spreadsheet.</p>
-        <p class="lede zh">扫描文件夹，用本地 AI 或云端模型给每个视频、音频打内容标签，按标签筛选，再把勾选的文件直接变成批量 FFmpeg 命令。不建表格，不上传素材。</p>
+        <p class="lede en">Scan a folder, tag every video and audio file with local AI on your GPU or CPU, filter by content, then remux, compress with NVENC / AMF / x265, or run your own FFmpeg command — with a preview before anything runs.</p>
+        <p class="lede zh">扫描文件夹，用本地 AI 在显卡或 CPU 上给每个视频、音频打内容标签，按标签筛选，再直接转封装、用 NVENC / AMF / x265 压缩，或跑你自己的 FFmpeg 命令；执行前都能先看命令预览。</p>
         <div class="actions">
           <a class="btn" href="https://github.com/yvgui2004/media-filter/releases/latest">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
@@ -177,7 +177,7 @@
 
         <figure class="shot">
           <img src="screenshots/demo.gif" width="1000" height="625"
-               alt="Scanning a folder, tagging clips with local AI, filtering by tag, and generating batch FFmpeg commands">
+               alt="Scanning a folder, tagging clips with local AI, filtering by tag, and processing the selection with FFmpeg">
         </figure>
       </div>
     </div>
@@ -191,19 +191,19 @@
         <div class="cards">
           <article class="card">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M5 15l.8 2.2L8 18l-2.2.8L5 21l-.8-2.2L2 18l2.2-.8z"/><path d="M19 14l.7 1.9L21.6 16.6l-1.9.7L19 19.2l-.7-1.9-1.9-.7 1.9-.7z"/></svg>
-            <h3>Local-first AI tagging</h3>
-            <p class="en">YOLOv8n runs on your GPU-free CPU. People, vehicles, pets, food, screens — 8 built-in tags without a single upload. Hybrid and cloud modes cover all 26.</p>
-            <p class="zh">YOLOv8n 在本机 CPU 推理，人物、车辆、宠物、食物、屏幕等 8 类标签无需上传；混合 / 云端模式覆盖 26 类。</p>
+            <h3><span class="en">Local-first AI tagging</span><span class="zh">本机 AI 识别</span></h3>
+            <p class="en">YOLOv8n runs locally on the GPU through DirectML (NVIDIA, AMD and Intel) with a CPU fallback: people, vehicles, pets, food, screens — 8 built-in tags without a single upload. Hybrid and cloud modes cover all 26, and you can add up to 10 custom labels such as 踢足球 or 王者荣耀.</p>
+            <p class="zh">YOLOv8n 通过 DirectML 在本机显卡上推理（NVIDIA、AMD、Intel，自动回退 CPU）：人物、车辆、宠物、食物、屏幕等 8 类标签无需上传；混合 / 云端覆盖 26 类，还能加最多 10 个自定义标签，如「踢足球」「王者荣耀」。</p>
           </article>
           <article class="card">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="M16 17l5-5-5-5" opacity="0"/><path d="M17 14l3 3-3 3"/></svg>
-            <h3>Batch FFmpeg, no syntax</h3>
-            <p class="en">Pick x265 or NVENC, preview every command with real paths, then copy, save as .bat, or run in place. Quoted paths with spaces just work.</p>
-            <p class="zh">选 x265 / NVENC 预设，带真实路径预览命令，可复制、存 .bat 或直接执行；带空格的路径也能正确处理。</p>
+            <h3><span class="en">Batch processing, no syntax</span><span class="zh">批量处理，不用写语法</span></h3>
+            <p class="en">One dialog: lossless remux, compression with x265 / x264 / NVIDIA NVENC / AMD AMF, or your own FFmpeg template. Preview every command, keep outputs collision-safe, and watch live progress with a result summary.</p>
+            <p class="zh">一个对话框：无损转封装、x265 / x264 / NVIDIA NVENC / AMD AMF 压缩，或自定义 FFmpeg 模板。每个文件都能预览命令，输出自动防冲突，执行时有实时进度和结果汇总。</p>
           </article>
           <article class="card">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.4-3 8.4-7 10-4-1.6-7-5.6-7-10V6z"/><path d="M9.5 12l1.8 1.8L15 10"/></svg>
-            <h3>Private by default</h3>
+            <h3><span class="en">Private by default</span><span class="zh">默认保护隐私</span></h3>
             <p class="en">Scanning is offline. The API key is encrypted with Windows DPAPI, keys are masked in logs, and nothing uploads before a confirmation card.</p>
             <p class="zh">扫描全程离线；API Key 用 Windows DPAPI 加密，日志自动打码；上传前一定先弹确认卡。</p>
           </article>
@@ -220,8 +220,8 @@
       <div class="wrap">
         <h2 class="en">Screenshots</h2>
         <h2 class="zh">界面截图</h2>
-        <p class="sub en">Real captures from the app — local AI tagging on 14 demo files, zero failures.</p>
-        <p class="sub zh">真实界面截图：本地 AI 识别 14 个演示文件，0 失败。</p>
+        <p class="sub en">Real captures from the app — main window: local AI tagging on 14 demo files, zero failures.</p>
+        <p class="sub zh">真实界面截图：主界面为本地 AI 识别 14 个演示文件，0 失败。</p>
         <div class="gallery">
           <figure>
             <img src="screenshots/main-light.png" alt="Main window, light theme" loading="lazy">
@@ -234,9 +234,9 @@
             <figcaption class="zh">主界面 · 深色</figcaption>
           </figure>
           <figure>
-            <img src="screenshots/batch.png" alt="Batch FFmpeg command dialog" loading="lazy">
-            <figcaption class="en">Batch commands</figcaption>
-            <figcaption class="zh">批量命令</figcaption>
+            <img src="screenshots/batch.png" alt="Batch processing dialog" loading="lazy">
+            <figcaption class="en">Batch processing</figcaption>
+            <figcaption class="zh">批量处理</figcaption>
           </figure>
           <figure>
             <img src="screenshots/settings.png" alt="Settings, tag palette" loading="lazy">
@@ -262,7 +262,7 @@
         </div>
         <div class="spec">
           <div><b>Windows 10 / 11 · 64-bit</b><span class="en">Only supported platform today</span><span class="zh">目前仅支持 Windows</span></div>
-          <div><b class="en">~160 MB ZIP</b><b class="zh">约 160 MB ZIP</b><span class="en">Python + FFmpeg + model bundled</span><span class="zh">内置 Python、FFmpeg 与模型</span></div>
+          <div><b class="en">~168 MB ZIP</b><b class="zh">约 168 MB ZIP</b><span class="en">Python + FFmpeg + model bundled</span><span class="zh">内置 Python、FFmpeg 与模型</span></div>
           <div><b class="en">MIT source</b><b class="zh">源码 MIT</b><span class="en">FFmpeg GPL-3.0, YOLOv8 AGPL-3.0 — see notices</span><span class="zh">FFmpeg GPL-3.0、YOLOv8 AGPL-3.0，详见说明</span></div>
         </div>
       </div>

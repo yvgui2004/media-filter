@@ -6,8 +6,8 @@ Pushing a version tag runs `.github/workflows/release.yml`:
 
 ```powershell
 # bump version in pyproject.toml and add the CHANGELOG section first
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 The workflow checks that the tag matches `pyproject.toml`, runs pytest and
@@ -55,17 +55,18 @@ validated locally:
 winget validate --manifest packaging\winget\yvgui2004.MediaFilter\0.1.1
 ```
 
-To publish a version:
+Current status: the first submission (`0.1.1`, new package) is open as
+[microsoft/winget-pkgs#484604](https://github.com/microsoft/winget-pkgs/pull/484604)
+and has passed validation. Submit `0.2.0` only after that PR merges — winget
+rejects an update when the base package does not exist yet. Once merged, either
+configure `WINGET_TOKEN` before the next tag, or run the script manually:
 
-1. Sign in to GitHub as the package publisher.
-2. Fork `microsoft/winget-pkgs`.
-3. Copy `packaging/winget/yvgui2004.MediaFilter/<version>/` to
-   `manifests/y/yvgui2004/MediaFilter/<version>/` in the fork.
-4. Open a pull request. Accept the Microsoft CLA when the bot asks.
-5. After merge, `winget install yvgui2004.MediaFilter` works.
-
-The manifest is intentionally not submitted yet: the repository owner must open
-the PR and accept the CLA under their own account.
+```powershell
+$env:WINGET_TOKEN = "<classic PAT with public_repo>"
+.venv\Scripts\python.exe scripts\winget_submit.py --version 0.2.0 `
+  --url https://github.com/yvgui2004/media-filter/releases/download/v0.2.0/MediaFilter-0.2.0-win64.zip `
+  --sha256 211331abec823fd7559e27033922557a5640444f23d75650a02900830d929566
+```
 
 ## Scoop
 

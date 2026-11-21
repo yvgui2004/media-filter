@@ -97,6 +97,13 @@ Double-click MediaFilter.exe. No Python, no FFmpeg installation needed.
 请保持 ffmpeg 文件夹与 MediaFilter.exe 的相对位置不变，不要单独移动 exe。
 Keep the ffmpeg folder next to MediaFilter.exe; do not move the exe alone.
 
+主要功能 / Features
+-------------------
+  - 本机 AI 识别：显卡 DirectML 或 CPU，可选自定义标签
+  - 批量处理：快速转换、压缩转码（NVENC / AMF / x265 / x264）、自定义 FFmpeg
+  - Local AI tagging on GPU or CPU, with custom labels
+  - Batch processing: remux, NVENC / AMF / x265 / x264 compression, custom FFmpeg
+
 环境要求 / Requirements
 -----------------------
 Windows 10 / 11，64 位。首次启动约 1-3 秒（单文件程序要先解压自身；

@@ -32,7 +32,7 @@ from mediafilter.i18n import Translator
 from mediafilter.ui.dialog_base import set_dialog_tokens
 from mediafilter.ui.main_window import MainWindow
 from mediafilter.ui.theme import apply_theme
-from mediafilter.ui.widgets.batch_dialog import BatchCommandDialog
+from mediafilter.ui.widgets.batch_process import BatchProcessDialog
 from mediafilter.ui.widgets.settings_dialog import SettingsDialog
 
 
@@ -129,8 +129,10 @@ def main() -> None:
     process_events(app)
 
     records = window._model.checked_records() or window._model.records()[:3]
-    batch = BatchCommandDialog(records, tr_call, window._load_presets(), window, window._palette)
-    batch.resize(820, 720)
+    batch = BatchProcessDialog(
+        records, tr_call, window._load_presets(), window,
+        tokens=window._palette, config=window._config,
+    )
     batch.show()
     process_events(app)
     save(batch, out / "batch.png")

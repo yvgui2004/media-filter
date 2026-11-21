@@ -33,7 +33,7 @@ from mediafilter.i18n import Translator
 from mediafilter.ui.dialog_base import set_dialog_tokens
 from mediafilter.ui.main_window import MainWindow
 from mediafilter.ui.theme import apply_theme
-from mediafilter.ui.widgets.batch_dialog import BatchCommandDialog
+from mediafilter.ui.widgets.batch_process import BatchProcessDialog
 
 FRAMES_DIR = Path(tempfile.mkdtemp(prefix="mediafilter-gif-frames-"))
 DURATIONS_MS = [1600, 1900, 1900, 2600]
@@ -134,10 +134,10 @@ def main() -> None:
     process_events(app, 0.3)
 
     records = window._model.checked_records() or window._model.records()[:3]
-    batch = BatchCommandDialog(
-        records, tr_call, window._load_presets(), window, window._palette
+    batch = BatchProcessDialog(
+        records, tr_call, window._load_presets(), window,
+        tokens=window._palette, config=window._config,
     )
-    batch.resize(1100, 760)
     batch.show()
     process_events(app, 0.8)
     frames.append(grab(batch, 3))
