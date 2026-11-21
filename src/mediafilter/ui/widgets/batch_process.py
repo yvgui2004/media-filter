@@ -1645,7 +1645,8 @@ class BatchProcessDialog(AppDialog):
         wrapper_layout.setSpacing(0)
         wrapper_layout.addWidget(line)
         wrapper_layout.addWidget(head)
-        layout.addWidget(wrapper)
+        toggle_row.addWidget(wrapper)
+        layout.addWidget(toggle)
         self._adv_toggle = toggle
         return box
 

@@ -14,6 +14,14 @@ All notable changes to this project are documented here. The format follows
 - README now lists the 8 local YOLOv8n tags explicitly and marks scene,
   shot-size and technical tags as cloud-only.
 
+### Fixed
+
+- The batch dialog's 高级选项 row could not be opened: the click target was an
+  empty layout beside the actual disclosure row, so it had no size and never
+  received a click. The row now wraps the line, chevron, title and summary and
+  responds to mouse and keyboard.
+- The portable build's version resource was still 0.1.0; it now reports 0.2.0.
+
 ## [0.2.0] — 2026-11-21
 
 GPU-accelerated tagging and one batch-processing dialog.

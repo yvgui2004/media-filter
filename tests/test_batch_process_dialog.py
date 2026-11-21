@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from mediafilter.config import Config
@@ -78,6 +80,19 @@ def test_advanced_summary_hides_while_expanded(qt_app, dialog):
     dialog._toggle_advanced()
     assert dialog._settings.advanced is False
     assert not dialog._adv_summary.isHidden()
+
+
+def test_advanced_row_opens_on_click(qt_app, dialog):
+    # The disclosure used to be an empty row beside the real content, so it
+    # had no size and never received a click.
+    dialog.show()
+    qt_app.processEvents()
+    assert dialog._adv_toggle.isVisible()
+    assert dialog._adv_toggle.height() > 0
+
+    QTest.mouseClick(dialog._adv_summary, Qt.MouseButton.LeftButton)
+    qt_app.processEvents()
+    assert dialog._settings.advanced is True
 
 
 def test_settings_round_trip():

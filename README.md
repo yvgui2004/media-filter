@@ -282,7 +282,7 @@ Official releases are built by CI, not by hand: bump the version in `pyproject.t
 .venv\Scripts\python.exe -m pyright
 ```
 
-197 pytest cases run headless (`QT_QPA_PLATFORM=offscreen`), and pyright reports zero errors against `pyrightconfig.json`. Both steps also run on GitHub Actions for every push and pull request. / 共 197 个用例，可在无显示器环境运行；pyright 按仓库内的 `pyrightconfig.json` 检查，0 错误。两步都已接入 GitHub Actions。
+198 pytest cases run headless (`QT_QPA_PLATFORM=offscreen`), and pyright reports zero errors against `pyrightconfig.json`. Both steps also run on GitHub Actions for every push and pull request. / 共 198 个用例，可在无显示器环境运行；pyright 按仓库内的 `pyrightconfig.json` 检查，0 错误。两步都已接入 GitHub Actions。
 
 ## How to use / 如何使用
 
@@ -306,11 +306,11 @@ Full guide: [使用文档.md](使用文档.md) · Changes: [CHANGELOG.md](CHANGE
 
 **English**
 
-Python 3.10+ with a PySide6 / Qt6 desktop shell (Fusion plus token-driven QSS themes and a model/view table). Scanning calls `ffprobe` from a cancellable thread pool; FFmpeg work is built as plain data in `core/batch.py` (encoder specs, output planning, collision handling) and executed by `core/batch_exec.py`, kept apart from the UI. AI tagging is an optional extra: frames are piped from `ffmpeg` into ONNX Runtime with a YOLOv8n model, using the DirectML provider on the GPU and falling back to CPU; cloud modes work with any OpenAI-compatible `/v1/models` endpoint. Config is JSON; the API key is encrypted with Windows DPAPI; a rotating log is written next to the config for support. 197 pytest cases and a pyright pass cover the core logic.
+Python 3.10+ with a PySide6 / Qt6 desktop shell (Fusion plus token-driven QSS themes and a model/view table). Scanning calls `ffprobe` from a cancellable thread pool; FFmpeg work is built as plain data in `core/batch.py` (encoder specs, output planning, collision handling) and executed by `core/batch_exec.py`, kept apart from the UI. AI tagging is an optional extra: frames are piped from `ffmpeg` into ONNX Runtime with a YOLOv8n model, using the DirectML provider on the GPU and falling back to CPU; cloud modes work with any OpenAI-compatible `/v1/models` endpoint. Config is JSON; the API key is encrypted with Windows DPAPI; a rotating log is written next to the config for support. 198 pytest cases and a pyright pass cover the core logic.
 
 **中文**
 
-Python 3.10+，界面为 PySide6 / Qt6（Fusion + token 驱动的 QSS 主题、model/view 表格）。扫描在可取消的线程池里调用 `ffprobe`；FFmpeg 相关逻辑在 `core/batch.py` 里以纯数据构建（编码器规格、输出规划、重名处理），由 `core/batch_exec.py` 执行，和界面解耦。AI 识别是可选依赖：`ffmpeg` 管道抽帧，ONNX Runtime 跑 YOLOv8n，优先用 DirectML 走显卡、失败回退 CPU；抽帧强度在本地和云端共用一套帧数策略。云端模式兼容任意 OpenAI 格式的 `/v1/models` 接口。配置是 JSON，API Key 用 Windows DPAPI 加密，配置旁边写循环日志便于排查问题。197 个 pytest 用例与 pyright 检查覆盖核心逻辑。
+Python 3.10+，界面为 PySide6 / Qt6（Fusion + token 驱动的 QSS 主题、model/view 表格）。扫描在可取消的线程池里调用 `ffprobe`；FFmpeg 相关逻辑在 `core/batch.py` 里以纯数据构建（编码器规格、输出规划、重名处理），由 `core/batch_exec.py` 执行，和界面解耦。AI 识别是可选依赖：`ffmpeg` 管道抽帧，ONNX Runtime 跑 YOLOv8n，优先用 DirectML 走显卡、失败回退 CPU；抽帧强度在本地和云端共用一套帧数策略。云端模式兼容任意 OpenAI 格式的 `/v1/models` 接口。配置是 JSON，API Key 用 Windows DPAPI 加密，配置旁边写循环日志便于排查问题。198 个 pytest 用例与 pyright 检查覆盖核心逻辑。
 
 ## License / 许可
 
