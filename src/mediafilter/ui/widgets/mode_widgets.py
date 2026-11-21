@@ -154,9 +154,14 @@ class ModeCard(QAbstractButton):
 
         top = QHBoxLayout()
         top.setSpacing(_scaled(7) if compact else 7)
-        self.dot = RadioDot(tokens, _scaled(14) if compact else 14)
+        # The settings page (compact cards) drops the radio dot: the accent
+        # border already marks the selection, and the title now starts at the
+        # card's left padding. The first-run cards keep the dot.
+        self.dot: RadioDot | None = None
+        if not compact:
+            self.dot = RadioDot(tokens, 14)
+            top.addWidget(self.dot)
         self.title = _label(mode_text(tr, mode), "ModeTitle")
-        top.addWidget(self.dot)
         top.addWidget(self.title)
         top.addStretch(1)
         layout.addLayout(top)
@@ -197,7 +202,8 @@ class ModeCard(QAbstractButton):
             super().nextCheckState()
 
     def _sync(self) -> None:
-        self.dot.set_checked(self.isChecked())
+        if self.dot is not None:
+            self.dot.set_checked(self.isChecked())
         if self.isChecked():
             size = _scaled(10) if self._compact else 11
             self.foot.setStyleSheet(

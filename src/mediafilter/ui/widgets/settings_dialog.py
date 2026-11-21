@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...config import Config
-from ...core import secret_store
+from ...core import gpu, secret_store
 from ...core.cloud_models import (
     IMAGE, TEXT, UNKNOWN, VERIFIED_IMAGE, CloudModelError, ModelInfo,
     list_models, normalize_base_url, probe_vision,
@@ -192,6 +192,62 @@ class _StatusRow(QWidget):
                 self.action.setVisible(bool(action))
 
 
+class _ElidedLabel(QLabel):
+    """Single-line label that ellipsizes instead of widening its row."""
+
+    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._full = text
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def setText(self, text: str) -> None:  # noqa: N802 (Qt name)
+        self._full = text
+        self.setToolTip(text)
+        self._elide()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt name)
+        super().resizeEvent(event)
+        self._elide()
+
+    def _elide(self) -> None:
+        text = self.fontMetrics().elidedText(
+            self._full, Qt.TextElideMode.ElideRight, max(0, self.width())
+        )
+        QLabel.setText(self, text)
+
+
+class _DeviceStatusRow(QWidget):
+    """7px dot + 12/600 status text used by the inference-device panel."""
+
+    def __init__(self, tokens: dict[str, str], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._tokens = tokens
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(7)
+        self.dot = QLabel()
+        self.dot.setFixedSize(7, 7)
+        row.addWidget(self.dot)
+        self.text = _ElidedLabel()
+        row.addWidget(self.text, 1)
+        self.set_status("idle", "")
+
+    def set_status(self, tone: str, text: str) -> None:
+        colors = {
+            "idle": self._tokens["ink_3"],
+            "ok": self._tokens["green"],
+            "bad": self._tokens["red"],
+        }
+        color = colors.get(tone, self._tokens["ink_3"])
+        self.dot.setStyleSheet(
+            f"background: {color}; border-radius: 3px;"
+        )
+        self.text.setStyleSheet(
+            f"color: {self._tokens['ink_2']}; font-size: 12px; font-weight: 600;"
+        )
+        self.text.setText(text)
+
+
 class _ModelListWorker(QThread):
     ok = Signal(list)
     failed = Signal(str)
@@ -255,6 +311,15 @@ class CheckRow(QAbstractButton):
         self.setFont(font)
         self.toggled.connect(lambda _checked: self.update())
 
+    def setEnabled(self, enabled: bool) -> None:  # noqa: N802 - Qt API
+        super().setEnabled(enabled)
+        self.setCursor(
+            Qt.CursorShape.PointingHandCursor
+            if enabled
+            else Qt.CursorShape.ForbiddenCursor
+        )
+        self.update()
+
     def sizeHint(self) -> QSize:
         metrics = QFontMetrics(self.font())
         trailing = _scaled(4) if self._box != 16 else 4
@@ -266,6 +331,8 @@ class CheckRow(QAbstractButton):
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        if not self.isEnabled():
+            painter.setOpacity(0.45)
         tokens = self._tokens
         box = self._box
         k = box / 16
@@ -300,17 +367,21 @@ class CheckRow(QAbstractButton):
 
 
 class Segment(QFrame):
-    """Three-button segmented control (抽帧强度)."""
+    """Three-button segmented control (frame policy / inference device)."""
 
     changed = Signal(str)
 
     def __init__(self, tr, tokens: dict[str, str],
                  parent: QWidget | None = None,
-                 compact: bool = False) -> None:
+                 compact: bool = False,
+                 options: tuple[tuple[str, str], ...] | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("SegmentBox")
         self._tokens = tokens
         self._compact = compact
+        self._choices = options or tuple(
+            (policy, tr(f"settings.frame_{policy}")) for policy in _FRAME_POLICIES
+        )
         margin = _scaled(2) if compact else 2
         layout = QHBoxLayout(self)
         layout.setContentsMargins(margin, margin, margin, margin)
@@ -318,8 +389,8 @@ class Segment(QFrame):
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
         self.buttons: dict[str, QPushButton] = {}
-        for policy in _FRAME_POLICIES:
-            button = QPushButton(tr(f"settings.frame_{policy}"))
+        for value, label in self._choices:
+            button = QPushButton(label)
             button.setObjectName("Segment")
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -327,20 +398,28 @@ class Segment(QFrame):
             button.setMinimumWidth(_scaled(56) if compact else 56)
             self._group.addButton(button)
             layout.addWidget(button)
-            self.buttons[policy] = button
-            button.clicked.connect(lambda _checked=False, p=policy: self.changed.emit(p))
+            self.buttons[value] = button
+            button.clicked.connect(
+                lambda _checked=False, v=value: self.changed.emit(v)
+            )
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
-    def set_policy(self, policy: str) -> None:
-        button = self.buttons.get(policy)
+    def set_value(self, value: str) -> None:
+        button = self.buttons.get(value)
         if button is not None:
             button.setChecked(True)
 
-    def policy(self) -> str:
+    def value(self) -> str:
         for key, button in self.buttons.items():
             if button.isChecked():
                 return key
-        return "auto"
+        return self._choices[0][0]
+
+    def set_policy(self, policy: str) -> None:
+        self.set_value(policy)
+
+    def policy(self) -> str:
+        return self.value()
 
 
 class _SettingsTab(QAbstractButton):
@@ -761,6 +840,13 @@ class SettingsDialog(AppDialog):
         self._frame_policy = (
             config.frame_policy if config.frame_policy in _FRAME_POLICIES else "auto"
         )
+        self._device_setting = gpu.normalize_device(
+            getattr(config, "ai_device", "auto")
+        )
+        self._device_report = gpu.DeviceReport(())
+        self._dml_available = False
+        self._device_meta = ""
+        self._device_rail = ""
 
         self.setWindowTitle(
             tr("first_run.window_title") if self._first_run else tr("settings.title")
@@ -955,17 +1041,19 @@ class SettingsDialog(AppDialog):
         return page, box
 
     def _pane_header(self, title: str, lede: str) -> QWidget:
+        # The prototype keeps the title and its lede on one baseline row.
         header = QWidget()
-        box = QVBoxLayout(header)
-        box.setContentsMargins(0, 0, 0, 0)
-        box.setSpacing(1)
+        row = QHBoxLayout(header)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(_scaled(9))
         title_label = QLabel(title)
         title_label.setObjectName("PaneTitle")
-        box.addWidget(title_label)
+        title_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        row.addWidget(title_label, 0, Qt.AlignmentFlag.AlignBottom)
         lede_label = QLabel(lede)
         lede_label.setObjectName("PaneLede")
         lede_label.setWordWrap(True)
-        box.addWidget(lede_label)
+        row.addWidget(lede_label, 1, Qt.AlignmentFlag.AlignBottom)
         return header
 
     def _fact_card(self, label: str) -> tuple[QFrame, QLabel, QLabel]:
@@ -1128,8 +1216,8 @@ class SettingsDialog(AppDialog):
 
         sampling = QFrame()
         sampling.setObjectName("AdvPanel")
-        sampling.setMinimumHeight(_scaled(170))
-        sampling.setMaximumHeight(_scaled(188))
+        sampling.setMinimumHeight(_scaled(118))
+        sampling.setMaximumHeight(_scaled(118))
         sampling_box = QVBoxLayout(sampling)
         sampling_box.setContentsMargins(
             _scaled(11), _scaled(10), _scaled(11), _scaled(10)
@@ -1148,7 +1236,7 @@ class SettingsDialog(AppDialog):
         checks = QFrame()
         checks.setObjectName("AdvPanel")
         checks.setMinimumHeight(_scaled(104))
-        checks.setMaximumHeight(_scaled(118))
+        checks.setMaximumHeight(_scaled(150))
         checks_box = QVBoxLayout(checks)
         checks_box.setContentsMargins(
             _scaled(11), _scaled(10), _scaled(11), _scaled(10)
@@ -1159,9 +1247,81 @@ class SettingsDialog(AppDialog):
         )
         self._upload_only.setChecked(self._config.upload_target_only)
         checks_box.addWidget(self._upload_only)
-        checks_box.addWidget(self._hint(self._tr("settings.upload_only_hint")))
+        self._upload_hint = self._hint(self._tr("settings.upload_only_hint"))
+        checks_box.addWidget(self._upload_hint)
+        self._color_local = CheckRow(
+            self._tr("settings.color_local"), self._tokens, compact=True,
+        )
+        self._color_local.setChecked(self._config.local_color_tags)
+        checks_box.addWidget(self._color_local)
+        self._color_hint = self._hint(self._tr("settings.color_local_hint"))
+        checks_box.addWidget(self._color_hint)
+        checks_box.addStretch(1)
         columns.addWidget(checks, 1)
         box.addLayout(columns, 0)
+
+        self._device_report = gpu.inspect()
+        self._dml_available = gpu.dml_available()
+        device = QFrame()
+        device.setObjectName("AdvPanel")
+        device.setMinimumHeight(_scaled(74))
+        device_row = QHBoxLayout(device)
+        device_row.setContentsMargins(
+            _scaled(11), _scaled(9), _scaled(11), _scaled(9)
+        )
+        device_row.setSpacing(22)
+        self._device_row = device_row
+
+        device_left = QVBoxLayout()
+        device_left.setContentsMargins(0, 0, 0, 0)
+        device_left.setSpacing(_scaled(6))
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(_scaled(7))
+        title_label = QLabel(self._tr("settings.device_title"))
+        title_label.setObjectName("DeviceTitle")
+        title_font = title_label.font()
+        title_font.setLetterSpacing(
+            QFont.SpacingType.AbsoluteSpacing, 0.6
+        )
+        title_label.setFont(title_font)
+        title_row.addWidget(title_label)
+        chip = QLabel(self._tr("settings.device_directml"))
+        chip.setObjectName("DeviceChip")
+        chip.setToolTip(self._tr("settings.device_directml_note"))
+        chip_font = chip.font()
+        chip_font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 102)
+        chip.setFont(chip_font)
+        chip.setFixedHeight(_scaled(16))
+        title_row.addWidget(chip)
+        title_row.addStretch(1)
+        device_left.addLayout(title_row)
+        self._device_seg = Segment(
+            self._tr, self._tokens, device, compact=True,
+            options=(
+                ("auto", self._tr("settings.device_auto")),
+                ("cpu", self._tr("settings.device_cpu")),
+                ("gpu", self._tr("settings.device_gpu")),
+            ),
+        )
+        self._device_seg.setFixedWidth(318)
+        self._device_seg.set_value(self._device_setting)
+        device_left.addWidget(self._device_seg)
+        device_row.addLayout(device_left, 0)
+
+        device_right = QVBoxLayout()
+        device_right.setContentsMargins(0, 0, 0, 0)
+        device_right.setSpacing(_scaled(5))
+        device_right.addStretch(1)
+        self._device_status = _DeviceStatusRow(self._tokens, device)
+        device_right.addWidget(self._device_status)
+        self._device_hint = QLabel()
+        self._device_hint.setObjectName("DeviceHint")
+        self._device_hint.setWordWrap(True)
+        device_right.addWidget(self._device_hint)
+        device_right.addStretch(1)
+        device_row.addLayout(device_right, 1)
+        box.addWidget(device)
 
         facts = QHBoxLayout()
         facts.setContentsMargins(0, 0, 0, 0)
@@ -1172,6 +1332,15 @@ class SettingsDialog(AppDialog):
         facts.addWidget(card, 1)
         card, self._adv_fact_upload, _detail = self._fact_card(
             self._tr("settings.adv_fact_upload")
+        )
+        self._adv_fact_upload_label = card.findChild(QLabel, "FactLabel")
+        facts.addWidget(card, 1)
+        card, self._adv_fact_color, self._adv_fact_color_detail = self._fact_card(
+            self._tr("settings.adv_fact_color")
+        )
+        facts.addWidget(card, 1)
+        card, self._adv_fact_device, self._adv_fact_device_detail = self._fact_card(
+            self._tr("settings.device_fact_title")
         )
         facts.addWidget(card, 1)
         box.addLayout(facts)
@@ -1250,9 +1419,12 @@ class SettingsDialog(AppDialog):
         self._rail_scope_original = _RailLine(
             self._tr("settings.summary_scope_original"), "—", self._tokens,
         )
+        self._rail_scope_device = _RailLine(
+            self._tr("settings.summary_scope_device"), "—", self._tokens,
+        )
         for line in (
             self._rail_scope_frames, self._rail_scope_upload,
-            self._rail_scope_original,
+            self._rail_scope_original, self._rail_scope_device,
         ):
             scope_box.addWidget(line)
         column.addWidget(scope)
@@ -1522,7 +1694,14 @@ class SettingsDialog(AppDialog):
         self._upload_only = CheckRow(tr("settings.upload_only"), self._tokens)
         self._upload_only.setChecked(self._config.upload_target_only)
         panel.addWidget(self._upload_only)
-        panel.addWidget(self._hint(tr("settings.upload_only_hint")))
+        self._upload_hint = self._hint(tr("settings.upload_only_hint"))
+        panel.addWidget(self._upload_hint)
+
+        self._color_local = CheckRow(tr("settings.color_local"), self._tokens)
+        self._color_local.setChecked(self._config.local_color_tags)
+        panel.addWidget(self._color_local)
+        self._color_hint = self._hint(tr("settings.color_local_hint"))
+        panel.addWidget(self._color_hint)
 
         self._adv_panel.setVisible(_ADVANCED_OPEN)
         body.addWidget(self._adv_panel)
@@ -1599,8 +1778,13 @@ class SettingsDialog(AppDialog):
         if self._model_status.action is not None:
             self._model_status.action.clicked.connect(self._model_action)
         self._upload_only.toggled.connect(lambda _checked: self._update_advanced_facts())
+        self._color_local.toggled.connect(lambda _checked: self._update_advanced_facts())
+        if not self._first_run and hasattr(self, "_device_seg"):
+            self._device_seg.changed.connect(self._on_device_changed)
         self._update_save()
         self._refresh_mode_state()
+        self._refresh_device_status()
+        self._sync_device_metrics()
 
     # -- initial state ----------------------------------------------------
 
@@ -1643,6 +1827,119 @@ class SettingsDialog(AppDialog):
         self._frame_note.setText(self._tr(f"settings.frame_note_{policy}"))
         self._update_summary()
 
+    def _on_device_changed(self, value: str) -> None:
+        value = gpu.normalize_device(value)
+        if value == self._device_setting:
+            return
+        self._device_setting = value
+        self._refresh_device_status()
+        self._update_summary()
+
+    def _device_choice(self) -> gpu.DeviceChoice:
+        return gpu.choose(
+            self._device_setting, self._device_report, self._dml_available
+        )
+
+    def _sync_device_metrics(self) -> None:
+        """Match the prototype's container query at the 966px minimum.
+
+        Above 980px the segment is 318px with a 22px gap; at the dialog's
+        minimum width the HTML narrows both so the status text keeps room.
+        """
+        if not hasattr(self, "_device_seg"):
+            return
+        narrow = self.width() < 980
+        self._device_row.setSpacing(16 if narrow else 22)
+        self._device_seg.setFixedWidth(276 if narrow else 318)
+
+    def _refresh_device_status(self) -> None:
+        """Mirror the HTML device row: dot + model + hint + fact card."""
+        self._device_meta = ""
+        self._device_rail = ""
+        if not hasattr(self, "_device_status"):
+            return
+        tr = self._tr
+        choice = self._device_choice()
+        adapter = choice.adapter
+        auto = self._device_setting == "auto"
+        name = adapter.name if adapter is not None else ""
+        short = gpu.short_adapter_name(name) if name else ""
+
+        if choice.state in ("gpu", "igpu") and adapter is not None:
+            status = tr(
+                "settings.device_status_auto" if auto
+                else "settings.device_status_manual",
+                name=name,
+            )
+            if choice.state == "igpu":
+                meta = tr("settings.device_meta_igpu")
+                hint = tr("settings.device_hint_igpu")
+                detail = tr(
+                    "settings.device_fact_vendor_igpu", vendor=adapter.vendor
+                )
+            else:
+                meta = tr("settings.device_meta_gpu")
+                hint = tr(
+                    "settings.device_hint_gpu" if auto
+                    else "settings.device_hint_gpu_manual"
+                )
+                detail = tr(
+                    "settings.device_fact_vendor", vendor=adapter.vendor
+                )
+            tone = "ok"
+            rail = short
+            fact = short
+        elif choice.state == "cpu":
+            status = tr(
+                "settings.device_status_cpu_auto" if auto
+                else "settings.device_status_cpu"
+            )
+            meta = tr("settings.device_meta_cpu")
+            hint = tr(
+                "settings.device_hint_cpu_manual" if not auto
+                else "settings.device_hint_cpu" if self._dml_available
+                else "settings.device_hint_no_dml"
+            )
+            tone = "idle"
+            rail = tr("settings.device_rail_cpu")
+            fact = tr("settings.device_fact_cpu")
+            detail = tr(
+                "settings.device_fact_detail_cpu_auto" if auto
+                else "settings.device_fact_detail_cpu"
+            )
+        elif choice.state == "warp":
+            status = tr("settings.device_status_warp")
+            meta = tr("settings.device_meta_cpu")
+            hint = tr("settings.device_hint_warp")
+            tone = "bad"
+            rail = tr("settings.device_rail_warp")
+            fact = tr("settings.device_fact_cpu")
+            detail = tr("settings.device_fact_detail_warp")
+        else:
+            status = tr("settings.device_status_unavailable")
+            meta = tr("settings.device_meta_unavailable")
+            hint = tr(
+                "settings.device_hint_no_dml"
+                if self._device_report.hardware is not None
+                and not self._dml_available
+                else "settings.device_hint_unavailable"
+            )
+            tone = "bad"
+            rail = tr("settings.device_rail_unavailable")
+            fact = tr("settings.device_fact_unavailable")
+            detail = tr("settings.device_fact_detail_unavailable")
+
+        self._device_status.set_status(tone, status)
+        self._device_hint.setText(hint)
+        if tone == "bad":
+            self._device_hint.setStyleSheet(f"color: {self._tokens['red']};")
+        else:
+            self._device_hint.setStyleSheet("")
+        self._adv_fact_device.setText(fact)
+        self._adv_fact_device_detail.setText(detail)
+        self._device_meta = meta
+        self._device_rail = rail
+
     def selected_mode(self) -> str:
         """The default mode currently drafted in the page."""
         if self._mode_cards is not None:
@@ -1657,6 +1954,22 @@ class SettingsDialog(AppDialog):
     def _refresh_mode_state(self) -> None:
         mode = self._selected_mode()
         local = mode == "local"
+        cloud = mode == "cloud"
+        if hasattr(self, "_upload_only"):
+            self._upload_only.setEnabled(mode == "hybrid")
+            if hasattr(self, "_upload_hint"):
+                self._upload_hint.setText(self._tr(
+                    "settings.upload_only_hint" if mode == "hybrid"
+                    else "settings.upload_cloud_hint" if cloud
+                    else "settings.upload_local_hint"
+                ))
+        if hasattr(self, "_color_local"):
+            self._color_local.setEnabled(not cloud)
+            if hasattr(self, "_color_hint"):
+                self._color_hint.setText(self._tr(
+                    "settings.color_local_cloud_hint"
+                    if cloud else "settings.color_local_hint"
+                ))
         self._api_body.setEnabled(not local)
         # The prototype fades the whole API block in local mode; without this
         # the fields look editable even though clicks do nothing. The effect
@@ -1678,9 +1991,11 @@ class SettingsDialog(AppDialog):
             self._key_required.setVisible(False)
         else:
             self._update_save()
+        if hasattr(self, "_adv_fact_color"):
+            self._update_advanced_facts()
         self._update_summary()
 
-    def _on_tags_changed(self, count: int) -> None:
+    def _on_tags_changed(self, _count: int) -> None:
         if self._first_run:
             self._update_tags_toggle_text(self._tags_panel.isVisible())
         self._update_summary()
@@ -1792,10 +2107,48 @@ class SettingsDialog(AppDialog):
         self._adv_fact_frames.setText(
             self._tr(f"settings.frame_{self._frame_policy}")
         )
-        self._adv_fact_upload.setText(
-            self._tr("settings.on") if self._upload_only.isChecked()
-            else self._tr("settings.off")
-        )
+        mode = self._selected_mode()
+        label_widget = getattr(self, "_adv_fact_upload_label", None)
+        if label_widget is not None:
+            label_widget.setText(
+                self._tr("settings.adv_fact_upload") if mode == "hybrid"
+                else self._tr("settings.adv_fact_upload_cloud") if mode == "cloud"
+                else self._tr("settings.adv_fact_upload_local")
+            )
+        if mode == "cloud":
+            upload_value = self._tr("settings.adv_fact_upload_cloud_value")
+        elif mode == "local":
+            upload_value = self._tr("settings.adv_fact_upload_local_value")
+        else:
+            upload_value = (
+                self._tr("settings.on") if self._upload_only.isChecked()
+                else self._tr("settings.off")
+            )
+        self._adv_fact_upload.setText(upload_value)
+        if hasattr(self, "_adv_fact_color") and hasattr(self, "_color_local"):
+            if self._selected_mode() == "cloud":
+                self._adv_fact_color.setText(
+                    self._tr("settings.adv_fact_color_na")
+                )
+                self._adv_fact_color_detail.setText(
+                    self._tr("settings.adv_fact_color_detail_na")
+                )
+            elif self._color_local.isChecked():
+                self._adv_fact_color.setText(
+                    self._tr("settings.adv_fact_color_on")
+                )
+                self._adv_fact_color_detail.setText(
+                    self._tr("settings.adv_fact_color_detail_on")
+                )
+            else:
+                self._adv_fact_color.setText(
+                    self._tr("settings.adv_fact_color_off")
+                )
+                self._adv_fact_color_detail.setText(
+                    self._tr("settings.adv_fact_color_detail_off")
+                )
+        if hasattr(self, "_device_seg"):
+            self._refresh_device_status()
 
     def _update_summary(self) -> None:
         """Keep the header chips, tab metas and right rail in one state."""
@@ -1820,7 +2173,17 @@ class SettingsDialog(AppDialog):
             else self._tr("settings.header_tags", n=builtin)
         )
         self._tabs["tags"].set_meta(tags_meta)
-        self._tabs["advanced"].set_meta(self._tr(f"settings.frame_{policy}"))
+        frame_label = self._tr(f"settings.frame_{policy}")
+        advanced_meta = frame_label
+        if not self._first_run and self._device_meta:
+            # Most states describe the device ("显卡"), so prefix the frame
+            # policy. The unavailable state already carries its own pair
+            # ("显卡 · 回落") and must not repeat the frame label.
+            advanced_meta = (
+                self._device_meta if "·" in self._device_meta
+                else f"{frame_label} · {self._device_meta}"
+            )
+        self._tabs["advanced"].set_meta(advanced_meta)
 
         self._scope_note.setText(self._tr(f"settings.scope_note_{mode}"))
         self._scope_strip.set_active(active)
@@ -1853,11 +2216,15 @@ class SettingsDialog(AppDialog):
         self._rail_scope_original.set_value(
             self._tr("settings.summary_original")
         )
+        if not self._first_run and hasattr(self, "_rail_scope_device"):
+            self._rail_scope_device.set_value(self._device_rail or "—")
         if not self._first_run and hasattr(self, "_custom_count"):
             self._custom_count.setText(self._tr(
                 "settings.custom_ratio", n=custom, max=10,
             ))
         self._update_advanced_facts()
+        if not self._first_run and hasattr(self, "_rail_scope_device"):
+            self._rail_scope_device.set_value(self._device_rail or "—")
 
     def _set_model_status(
         self, tone: str, text: str, detail: str = "", action: str = ""
@@ -1903,6 +2270,10 @@ class SettingsDialog(AppDialog):
                 )
 
     # -- model loading ----------------------------------------------------
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt name)
+        super().resizeEvent(event)
+        self._sync_device_metrics()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -2175,7 +2546,13 @@ class SettingsDialog(AppDialog):
         self._frame_policy = "auto"
         self._segment.set_policy("auto")
         self._on_frame_policy_changed("auto")
+        if hasattr(self, "_device_seg"):
+            self._device_setting = "auto"
+            self._device_seg.set_value("auto")
+            self._refresh_device_status()
         self._upload_only.setChecked(True)
+        if hasattr(self, "_color_local"):
+            self._color_local.setChecked(True)
         self._refresh_mode_state()
         self._show_tab("mode")
         self._update_save()
@@ -2257,7 +2634,10 @@ class SettingsDialog(AppDialog):
         self._config.tag_palette = [tag for tag in ALL_TAG_IDS if tag in enabled]
         self._config.custom_labels = list(self._custom_labels)
         self._config.frame_policy = self._segment.policy()
+        if hasattr(self, "_device_seg"):
+            self._config.ai_device = self._device_seg.value()
         self._config.upload_target_only = self._upload_only.isChecked()
+        self._config.local_color_tags = self._color_local.isChecked()
         self._config.first_run_done = True
         self._config.first_run_prompted = True
         self._config.guide_dismissed = True

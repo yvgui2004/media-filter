@@ -18,6 +18,7 @@ from PySide6.QtCore import QThread, Signal
 from ..core.cloud_tagger import (
     CloudTagConfig, cloud_model_id, cloud_tag_video, safe_error,
 )
+from ..core.color_tags import COLOR_PALETTE_VERSION
 from ..core.sampling import normalize_policy, sample_count
 from ..core.tag_cache import TagCache, cache_key
 from ..core.tagger import Detector, TagResult, tag_media
@@ -41,7 +42,9 @@ class CloudTagWorker(QThread):
         local_model_path: str | Path | None = None,
         upload_target_only: bool = True,
         frame_policy: str | None = None,
+        device: str = "auto",
         enabled_tags: list[str] | None = None,
+        color_tags: bool = True,
         cache_path: str | Path | None = None,
         parent=None,
     ) -> None:
@@ -54,9 +57,11 @@ class CloudTagWorker(QThread):
         self._sample = max(1, sample_frames)
         self._policy = normalize_policy(frame_policy)
         self._threads = max(1, threads)
+        self._device = device
         self._enabled = set(enabled_tags) if enabled_tags is not None else None
         self._local_model = Path(local_model_path) if local_model_path else None
         self._upload_target_only = upload_target_only
+        self._color_tags = bool(color_tags)
         self._cache = TagCache(cache_path)
         self._cancel = threading.Event()
 
@@ -77,11 +82,18 @@ class CloudTagWorker(QThread):
                 model_id += f"|frames:{self._policy}"
             if self._enabled is not None:
                 model_id += "|tags:" + ",".join(sorted(self._enabled))
+            model_id += (
+                f"|color:{int(self._color_tags)}"
+                f"|palette:{COLOR_PALETTE_VERSION}"
+            )
             detector = None
             if self._mode == "hybrid":
                 if self._local_model is None or not self._local_model.is_file():
                     raise RuntimeError("混合模式需要本地 ONNX 模型")
-                detector = Detector(self._local_model, threads=self._threads)
+                detector = Detector(
+                    self._local_model, threads=self._threads,
+                    device=self._device,
+                )
 
             pending = []
             for rec in self._records:
@@ -145,6 +157,7 @@ class CloudTagWorker(QThread):
                 detector, self._ffmpeg, rec.path, rec.duration,
                 sample_count=count, cancel_event=self._cancel,
                 enabled_tags=self._enabled,
+                color_tags_enabled=self._color_tags,
             )
             if local.error:
                 return local

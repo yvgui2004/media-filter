@@ -8,6 +8,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
+from ..core.color_tags import COLOR_PALETTE_VERSION
 from ..core.sampling import normalize_policy, sample_count
 from ..core.tag_cache import TagCache, cache_key
 from ..core.tagger import Detector, TagResult, tag_media
@@ -22,7 +23,9 @@ class TagWorker(QThread):
     def __init__(self, records, model_path: str | Path, ffmpeg_path: str,
                  sample_frames: int = 3, threads: int = 2, conf: float = 0.25,
                  frame_policy: str | None = None,
+                 device: str = "auto",
                  enabled_tags: list[str] | None = None,
+                 color_tags: bool = True,
                  cache_path: str | Path | None = None, parent=None):
         super().__init__(parent)
         self._records = list(records)
@@ -31,8 +34,10 @@ class TagWorker(QThread):
         self._sample = max(1, sample_frames)
         self._policy = normalize_policy(frame_policy)
         self._threads = max(1, threads)
+        self._device = device
         self._conf = conf
         self._enabled = set(enabled_tags) if enabled_tags is not None else None
+        self._color_tags = bool(color_tags)
         self._cache = TagCache(cache_path)
         self._cancel = threading.Event()
 
@@ -50,6 +55,10 @@ class TagWorker(QThread):
                 model_id += f"|frames:{self._policy}"
             if self._enabled is not None:
                 model_id += "|tags:" + ",".join(sorted(self._enabled))
+            model_id += (
+                f"|color:{int(self._color_tags)}"
+                f"|palette:{COLOR_PALETTE_VERSION}"
+            )
             pending = []
             for rec in self._records:
                 if self._cancel.is_set():
@@ -65,7 +74,10 @@ class TagWorker(QThread):
                     pending.append((rec, key))
 
             if pending and not self._cancel.is_set():
-                detector = Detector(self._model_path, threads=self._threads, conf=self._conf)
+                detector = Detector(
+                    self._model_path, threads=self._threads,
+                    conf=self._conf, device=self._device,
+                )
                 with ThreadPoolExecutor(max_workers=self._threads) as pool:
                     futures = {
                         pool.submit(self._tag_one, detector, rec): (rec, key)
@@ -107,4 +119,5 @@ class TagWorker(QThread):
             detector, self._ffmpeg, rec.path, rec.duration,
             sample_count=count, cancel_event=self._cancel,
             enabled_tags=self._enabled,
+            color_tags_enabled=self._color_tags,
         )

@@ -11,6 +11,8 @@ Esc closes. Clicking outside closes without replaying the click.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from PySide6.QtCore import (
     QEvent, QModelIndex, QPersistentModelIndex, QPoint, QPointF, QRectF,
     QSize, Qt, QTimer, Signal,
@@ -29,12 +31,33 @@ from .tokens import LIGHT, parse_color
 FIELD_HEIGHT = 34
 FIELD_RADIUS = 8
 ROW_HEIGHT = 36
+GROUP_HEIGHT = 26
 CARD_RADIUS = 10
 SHADOW = 12
 VISIBLE_ROWS = 8
+MAX_CARD_HEIGHT = 300
 MIN_POPUP_WIDTH = 196
 GRID_COLS = 4
 CELL_W, CELL_H, CELL_GAP = 46, 30, 4
+
+
+@dataclass(frozen=True)
+class MenuEntry:
+    """One row in a select popup: a group header or a pickable option.
+
+    ``note`` renders right-aligned in 10px muted type — the batch dialog uses
+    it to explain why a hardware encoder is disabled.
+    """
+
+    text: str
+    data: object = None
+    group: bool = False
+    disabled: bool = False
+    note: str = ""
+
+    @property
+    def selectable(self) -> bool:
+        return not self.group and not self.disabled
 
 
 class _MenuDelegate(QStyledItemDelegate):
@@ -58,27 +81,64 @@ class _MenuDelegate(QStyledItemDelegate):
         index: QModelIndex | QPersistentModelIndex,
     ) -> None:
         tokens = self._tokens
-        selected = bool(option.state & QStyle.StateFlag.State_Selected)
-        hovered = getattr(self.parent(), "hover_row", -1) == index.row()
+        menu = self.parent()
+        entry = menu.entry_at(index.row()) if isinstance(menu, _MenuList) else None
         rect = QRectF(option.rect)
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        if selected or hovered:
+
+        if entry is None:
+            painter.restore()
+            return
+
+        if entry.group:
+            font = QFont(option.font)
+            font.setPixelSize(10)
+            font.setWeight(QFont.Weight.DemiBold)
+            font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.6)
+            painter.setFont(font)
+            painter.setPen(parse_color(tokens["ink_3"]))
+            painter.drawText(
+                rect.adjusted(10, 0, -10, -4),
+                int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom),
+                entry.text,
+            )
+            painter.restore()
+            return
+
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        hovered = menu.hover_row == index.row() and entry.selectable
+        if entry.selectable and (selected or hovered):
             painter.setPen(Qt.PenStyle.NoPen)
             key = "accent_soft" if selected else "row_hover"
             painter.setBrush(parse_color(tokens[key]))
             painter.drawRoundedRect(rect.adjusted(0, 1, 0, -1), 8, 8)
 
+        note_font = QFont(option.font)
+        note_font.setPixelSize(10)
+        note_font.setWeight(QFont.Weight.Medium)
+        note_width = 0.0
+        if entry.note:
+            note_width = QFontMetrics(note_font).horizontalAdvance(entry.note) + 12
+        reserve = 34 + note_width
+
         font = QFont(option.font)
         font.setPixelSize(13)
-        font.setWeight(QFont.Weight.Medium if selected else QFont.Weight.Normal)
+        font.setWeight(
+            QFont.Weight.Medium if selected and entry.selectable else QFont.Weight.Normal
+        )
         painter.setFont(font)
-        painter.setPen(parse_color(tokens["accent"] if selected else tokens["ink"]))
+        if not entry.selectable:
+            color = tokens["ink_3"]
+        elif selected:
+            color = tokens["accent"]
+        else:
+            color = tokens["ink"]
+        painter.setPen(parse_color(color))
         metrics = QFontMetrics(font)
-        text_rect = rect.adjusted(10, 0, -34, 0)
-        label = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
+        text_rect = rect.adjusted(10, 0, -reserve, 0)
         text = metrics.elidedText(
-            label, Qt.TextElideMode.ElideRight, max(0, int(text_rect.width()))
+            entry.text, Qt.TextElideMode.ElideRight, max(0, int(text_rect.width()))
         )
         painter.drawText(
             text_rect,
@@ -86,7 +146,17 @@ class _MenuDelegate(QStyledItemDelegate):
             text,
         )
 
-        if selected:
+        if entry.note:
+            painter.setFont(note_font)
+            painter.setPen(parse_color(tokens["accent"] if selected else tokens["ink_3"]))
+            note_rect = rect.adjusted(10, 0, -34, 0)
+            painter.drawText(
+                note_rect,
+                int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
+                entry.note,
+            )
+
+        if selected and entry.selectable:
             cx, cy = rect.right() - 16, rect.center().y()
             painter.setPen(
                 QPen(
@@ -109,16 +179,17 @@ class _MenuList(QListWidget):
     chosen = Signal(int)
 
     def __init__(
-        self, items: list[str], current: int, tokens: dict[str, str]
+        self, entries: list[MenuEntry], current: int, tokens: dict[str, str]
     ) -> None:
         super().__init__()
         self.hover_row = -1
+        self._entries = entries
         self.setObjectName("MenuList")
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setUniformItemSizes(True)
+        self.setUniformItemSizes(False)
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
         self.setItemDelegate(_MenuDelegate(tokens, self))
@@ -132,16 +203,46 @@ class _MenuList(QListWidget):
             "QScrollBar::add-line, QScrollBar::sub-line { height: 0; }"
             "QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }"
         )
-        for text in items:
-            item = QListWidgetItem(text)
-            item.setSizeHint(QSize(10, ROW_HEIGHT))
+        for entry in entries:
+            item = QListWidgetItem(entry.text)
+            item.setSizeHint(
+                QSize(10, GROUP_HEIGHT if entry.group else ROW_HEIGHT)
+            )
             self.addItem(item)
-        if 0 <= current < self.count():
-            self.setCurrentRow(current)
-        self.itemClicked.connect(self._pick)
+        row = current if self._selectable(current) else self._first_selectable()
+        if row >= 0:
+            self.setCurrentRow(row)
+
+    def entry_at(self, row: int) -> MenuEntry | None:
+        if 0 <= row < len(self._entries):
+            return self._entries[row]
+        return None
+
+    def _selectable(self, row: int) -> bool:
+        entry = self.entry_at(row)
+        return bool(entry and entry.selectable)
+
+    def _first_selectable(self) -> int:
+        for row, entry in enumerate(self._entries):
+            if entry.selectable:
+                return row
+        return -1
+
+    def _step(self, delta: int) -> None:
+        if not self._entries:
+            return
+        row = self.currentRow()
+        for _ in range(len(self._entries)):
+            row = (row + delta) % len(self._entries)
+            if self._selectable(row):
+                self.setCurrentRow(row)
+                self.viewport().update()
+                return
 
     def _pick(self, item: QListWidgetItem) -> None:
-        self.chosen.emit(self.row(item))
+        row = self.row(item)
+        if self._selectable(row):
+            self.chosen.emit(row)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         row = self.indexAt(event.position().toPoint()).row()
@@ -158,8 +259,12 @@ class _MenuList(QListWidget):
 
     def keyPressEvent(self, event) -> None:
         key = event.key()
+        if key in (Qt.Key.Key_Down, Qt.Key.Key_Up):
+            self._step(1 if key == Qt.Key.Key_Down else -1)
+            event.accept()
+            return
         if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
-            if self.currentRow() >= 0:
+            if self._selectable(self.currentRow()):
                 self.chosen.emit(self.currentRow())
             event.accept()
             return
@@ -300,7 +405,7 @@ class _MenuPopup(QWidget):
 
     def __init__(
         self,
-        items: list[str],
+        items: list[MenuEntry],
         current: int,
         tokens: dict[str, str],
         anchor_width: int,
@@ -345,12 +450,15 @@ class _MenuPopup(QWidget):
         else:
             inner.setContentsMargins(6, 6, 6, 6)
             card_w = width_override or max(anchor_width, min_width)
-            rows = min(len(items), VISIBLE_ROWS)
+            total = sum(
+                GROUP_HEIGHT if entry.group else ROW_HEIGHT for entry in items
+            )
+            visible = min(total, MAX_CARD_HEIGHT - 12)
             self._list = _MenuList(items, current, tokens)
-            self._list.setFixedSize(card_w - 12, rows * ROW_HEIGHT)
+            self._list.setFixedSize(card_w - 12, visible)
             self._list.chosen.connect(self._pick)
             inner.addWidget(self._list)
-            card_h = self._list.height() + 12
+            card_h = visible + 12
 
         self._card_w = card_w
         self._card_h = card_h
@@ -426,7 +534,7 @@ class SelectField(QWidget):
     def __init__(self, label: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._label = label
-        self._items: list[tuple[str, object]] = []
+        self._items: list[MenuEntry] = []
         self._index = -1
         self._tokens: dict[str, str] = LIGHT
         self._hover = False
@@ -499,20 +607,28 @@ class SelectField(QWidget):
 
     # -- value API (QComboBox subset) ------------------------------------
 
-    def addItem(self, text: str, data: object = None) -> None:
-        self._items.append((text, data))
-        if self._index < 0:
-            self._index = 0
+    def addItem(
+        self,
+        text: str,
+        data: object = None,
+        *,
+        disabled: bool = False,
+        note: str = "",
+    ) -> None:
+        self._items.append(MenuEntry(text, data, disabled=disabled, note=note))
+        if self._index < 0 and not disabled:
+            self._index = len(self._items) - 1
         self.update()
         self._sync_a11y()
 
+    def addGroup(self, text: str) -> None:
+        """Insert a non-selectable header row above the next options."""
+        self._items.append(MenuEntry(text, group=True))
+        self.update()
+
     def addItems(self, texts) -> None:
         for text in texts:
-            self._items.append((text, None))
-            if self._index < 0:
-                self._index = 0
-        self.update()
-        self._sync_a11y()
+            self.addItem(text)
 
     def clear(self) -> None:
         self._items.clear()
@@ -526,31 +642,36 @@ class SelectField(QWidget):
     def currentIndex(self) -> int:
         return self._index
 
-    def currentText(self) -> str:
+    def currentEntry(self) -> MenuEntry | None:
         if 0 <= self._index < len(self._items):
-            return self._items[self._index][0]
-        return ""
-
-    def currentData(self) -> object:
-        if 0 <= self._index < len(self._items):
-            return self._items[self._index][1]
+            return self._items[self._index]
         return None
 
+    def currentText(self) -> str:
+        entry = self.currentEntry()
+        return entry.text if entry is not None and not entry.group else ""
+
+    def currentData(self) -> object:
+        entry = self.currentEntry()
+        return entry.data if entry is not None else None
+
     def findText(self, text: str) -> int:
-        for i, (item_text, _data) in enumerate(self._items):
-            if item_text == text:
+        for i, entry in enumerate(self._items):
+            if not entry.group and entry.text == text:
                 return i
         return -1
 
     def findData(self, data: object) -> int:
-        for i, (_text, item_data) in enumerate(self._items):
-            if item_data == data:
+        for i, entry in enumerate(self._items):
+            if not entry.group and entry.data == data:
                 return i
         return -1
 
     def setCurrentIndex(self, index: int) -> None:
         if index < 0 or index >= len(self._items):
             index = -1
+        elif not self._items[index].selectable:
+            return
         if index == self._index:
             self.update()
             return
@@ -710,7 +831,7 @@ class SelectField(QWidget):
         if self._popup is not None or not self._items or not self.isEnabled():
             return
         popup = _MenuPopup(
-            [text for text, _data in self._items],
+            list(self._items),
             self._index,
             self._tokens,
             self.width(),

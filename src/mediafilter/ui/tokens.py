@@ -30,6 +30,9 @@ LIGHT = {
     "scroll": "rgba(20, 35, 44, 0.22)",
     "green": "#3F7A4E",
     "red": "#B3261E",
+    "red_soft": "rgba(179, 38, 30, 0.10)",
+    "amber": "#A86B12",
+    "amber_soft": "rgba(168, 107, 18, 0.10)",
     "on_accent": "#FFFFFF",
 }
 
@@ -53,6 +56,9 @@ DARK = {
     "scroll": "rgba(230, 238, 243, 0.24)",
     "green": "#9BC46B",
     "red": "#E57373",
+    "red_soft": "rgba(229, 115, 115, 0.12)",
+    "amber": "#E0B15A",
+    "amber_soft": "rgba(224, 177, 90, 0.12)",
     "on_accent": "#0F161B",
 }
 

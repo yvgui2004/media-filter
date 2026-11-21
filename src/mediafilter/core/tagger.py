@@ -13,11 +13,14 @@ is not installed.
 from __future__ import annotations
 
 import math
+import logging
 import subprocess
 import sys
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from . import color_tags, gpu
 
 try:  # optional: the app must still start for users who never use AI tagging
     import numpy as np
@@ -25,6 +28,8 @@ except ImportError:  # pragma: no cover - exercised only on minimal installs
     np = None
 
 from .vocabulary import TAG_FALLBACK_NAMES
+
+logger = logging.getLogger(__name__)
 
 INPUT_SIZE = 640
 PAD_COLOR = 0x727272          # letterbox fill, matches Ultralytics' 114 grey
@@ -93,6 +98,63 @@ def tally_detections(
         label = TAG_FALLBACK_NAMES.get(tag_id, tag_id)
         votes[label] = votes.get(label, 0) + 1
     return votes
+
+
+@dataclass
+class FrameTally:
+    """One frame's base-tag counts plus colour votes per base label."""
+
+    votes: dict[str, int] = field(default_factory=dict)
+    color_votes: dict[str, dict[str, int]] = field(default_factory=dict)
+    class_frames: dict[str, int] = field(default_factory=dict)
+
+
+def tally_frame(
+    detections: list[Detection],
+    frame_rgb: np.ndarray | None = None,
+    enabled_tags: set[str] | None = None,
+    color_tags_enabled: bool = True,
+) -> FrameTally:
+    """Count base tags and one colour vote per class for this frame.
+
+    A frame may contain several cats; only the largest box votes on colour so
+    a tiny background cat cannot outvote the subject. Colour sampling is
+    skipped entirely when ``frame_rgb`` is absent (unit tests, decode failure)
+    or the feature is disabled.
+    """
+    allowed = LOCAL_TAG_IDS if enabled_tags is None else set(enabled_tags)
+    tally = FrameTally()
+    best_by_label: dict[str, tuple[float, Detection]] = {}
+
+    for det in detections:
+        tag_id = COCO_TO_TAG_ID.get(det.name)
+        if tag_id is None or tag_id not in allowed:
+            continue
+        label = TAG_FALLBACK_NAMES.get(tag_id, tag_id)
+        tally.votes[label] = tally.votes.get(label, 0) + 1
+        if (
+            not color_tags_enabled
+            or frame_rgb is None
+            or tag_id not in color_tags.COLOR_BASE_IDS
+            or det.name not in color_tags.COLOR_COCO_CLASSES
+        ):
+            continue
+        area = max(0.0, float(det.box[2])) * max(0.0, float(det.box[3]))
+        current = best_by_label.get(label)
+        if current is None or area > current[0]:
+            best_by_label[label] = (area, det)
+
+    for label, entry in best_by_label.items():
+        det = entry[1]
+        tally.class_frames[label] = tally.class_frames.get(label, 0) + 1
+        tag_id = COCO_TO_TAG_ID.get(det.name)
+        kind = "vehicle" if tag_id == "car" else "animal"
+        guess = color_tags.classify_box(frame_rgb, det.box, kind)
+        if guess is not None:
+            votes = tally.color_votes.setdefault(label, {})
+            votes[guess.key] = votes.get(guess.key, 0) + 1
+
+    return tally
 
 
 @dataclass
@@ -165,7 +227,8 @@ def _nms_numpy(boxes, scores, iou_threshold):
 class Detector:
     """Thin wrapper over an ONNX Runtime session. Thread-safe for `run` calls."""
 
-    def __init__(self, model_path: str | Path, threads: int = 2, conf: float = 0.25, iou: float = 0.45):
+    def __init__(self, model_path: str | Path, threads: int = 2, conf: float = 0.25,
+                 iou: float = 0.45, device: str = "auto"):
         if np is None:
             raise RuntimeError("AI tagging needs numpy: pip install numpy onnxruntime")
         import onnxruntime as ort
@@ -177,7 +240,31 @@ class Detector:
         opts.intra_op_num_threads = max(1, threads)
         opts.inter_op_num_threads = 1
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        self.session = ort.InferenceSession(str(model_path), opts, providers=["CPUExecutionProvider"])
+        self.requested_device = gpu.normalize_device(device)
+        providers: list = gpu.session_providers(self.requested_device)
+        if providers[0] == "DmlExecutionProvider":
+            # Pin the adapter the settings page showed; hybrid laptops can
+            # otherwise land on the iGPU while the UI names the discrete GPU.
+            providers = [
+                ("DmlExecutionProvider", {
+                    "device_id": gpu.dml_device_id(self.requested_device),
+                }),
+                "CPUExecutionProvider",
+            ]
+        try:
+            self.session = ort.InferenceSession(
+                str(model_path), opts, providers=providers
+            )
+        except Exception:
+            if providers[0] == "CPUExecutionProvider":
+                raise
+            logger.warning(
+                "DirectML session failed; falling back to CPU", exc_info=True
+            )
+            self.session = ort.InferenceSession(
+                str(model_path), opts, providers=["CPUExecutionProvider"]
+            )
+        self.providers = self.session.get_providers()
         self.input_name = self.session.get_inputs()[0].name
         self.conf = conf
         self.iou = iou
@@ -241,6 +328,7 @@ def tag_media(
     sample_count: int = 3,
     cancel_event: threading.Event | None = None,
     enabled_tags: set[str] | None = None,
+    color_tags_enabled: bool = True,
 ) -> TagResult:
     """Sample frames from a video and return stable built-in tag labels."""
     frames = []
@@ -254,13 +342,27 @@ def tag_media(
         return TagResult(error="no frames decoded")
 
     votes: dict[str, int] = {}
+    color_votes: dict[str, dict[str, int]] = {}
+    class_frames: dict[str, int] = {}
     total_det = 0
     for frame in frames:
-        frame_votes = tally_detections(detector.detect(frame), enabled_tags)
-        total_det += sum(frame_votes.values())
-        for label, count in frame_votes.items():
+        tally = tally_frame(
+            detector.detect(frame), frame, enabled_tags, color_tags_enabled
+        )
+        total_det += sum(tally.votes.values())
+        for label, count in tally.votes.items():
             votes[label] = votes.get(label, 0) + count
-    return TagResult(tags=aggregate_tags(votes, len(frames)), frames=len(frames), detections=total_det)
+        for label, by_color in tally.color_votes.items():
+            bucket = color_votes.setdefault(label, {})
+            for key, count in by_color.items():
+                bucket[key] = bucket.get(key, 0) + count
+        for label, count in tally.class_frames.items():
+            class_frames[label] = class_frames.get(label, 0) + count
+
+    tags = aggregate_tags(votes, len(frames))
+    if color_tags_enabled:
+        tags.extend(color_tags.aggregate_color_tags(color_votes, class_frames, tags))
+    return TagResult(tags=tags, frames=len(frames), detections=total_det)
 
 
 def find_model(configured: str | None = None) -> Path | None:

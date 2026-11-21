@@ -61,6 +61,25 @@ def test_local_worker_passes_the_enabled_palette(qt_app, tmp_path, monkeypatch):
     assert seen == [{"person", "dog"}]
 
 
+def test_local_worker_passes_the_colour_switch(qt_app, tmp_path, monkeypatch):
+    seen: list[bool] = []
+
+    def fake_tag(*_args, **kwargs):
+        seen.append(kwargs["color_tags_enabled"])
+        return TagResult()
+
+    monkeypatch.setattr(worker_module, "tag_media", fake_tag)
+    assert qt_app is not None
+    worker = TagWorker(
+        [], tmp_path / "model.onnx", "ffmpeg",
+        color_tags=False, cache_path=tmp_path / "tags.json",
+    )
+    short = SimpleNamespace(path="a.mp4", duration=30.0, mtime=1.0, size=10)
+    worker._tag_one(cast(Any, object()), short)
+
+    assert seen == [False]
+
+
 def test_missing_model_reports_failure_instead_of_raising(qt_app, tmp_path):
     worker = TagWorker(
         [], tmp_path / "missing.onnx", "ffmpeg",

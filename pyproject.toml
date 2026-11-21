@@ -17,7 +17,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pyright>=1.1.380"]
-ai = ["numpy>=1.24", "onnxruntime>=1.17"]
+ai = [
+    "numpy>=1.24",
+    "onnxruntime-directml>=1.17; sys_platform == 'win32'",
+    "onnxruntime>=1.17; sys_platform != 'win32'",
+]
 
 [project.scripts]
 mediafilter = "mediafilter.__main__:main"

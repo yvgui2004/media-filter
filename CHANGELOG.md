@@ -8,12 +8,32 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **GPU inference on Windows.** Local tagging now uses ONNX Runtime DirectML, so
+  NVIDIA, AMD and Intel GPUs all accelerate the same YOLOv8n model. Advanced
+  settings offers Auto / CPU / GPU, lists the detected adapter, skips the WARP
+  software renderer, and falls back to CPU if the DirectML session fails.
+- **Local colour tags for cats, dogs and cars.** A detected animal or vehicle
+  also gets a colour prefix (`黑猫`, `白狗`, `白车`) sampled on this PC: the
+  detection box is cropped to the animal centre or vehicle body band, converted
+  to HSV with NumPy (no OpenCV), and voted across frames so a single odd frame
+  cannot decide the result. Advanced settings has a "sample colour tags locally"
+  switch (on by default); cloud-only mode disables it. Cache keys include whether
+  colour sampling is on and the palette version, so toggling it re-tags instead
+  of serving stale labels.
+- Settings mode cards drop the radio dot; the accent border marks the selection.
+  The first-run cards keep the dot.
 - Tag-triggered release workflow: pushing `v*` runs tests and pyright, downloads
   the pinned FFmpeg and model inputs (SHA-256 verified), builds the portable
   zip, publishes the Release with notes and a `.sha256` file, and optionally
   opens the winget update PR. A manual dry run keeps the zip as an artifact.
 - The YOLOv8n ONNX weights are published as a pinned `model-v1` release asset so
   CI builds are reproducible without committing binaries.
+- **One batch-processing entry.** The separate batch-command and format-convert
+  toolbar buttons are merged into a single 批量处理 dialog with three task cards
+  (fast convert, compress, custom FFmpeg). It builds per-file commands for
+  x265 / x264, NVIDIA NVENC and AMD AMF with a CPU fallback, plans collision-safe
+  output paths, previews the exact commands, shows overall and per-file
+  progress, and summarises successes, failures and size savings.
 
 ## [0.1.1] — 2026-11-20
 

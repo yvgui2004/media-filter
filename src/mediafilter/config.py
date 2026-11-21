@@ -20,11 +20,13 @@ class Config:
     window_maximized: bool = False
     last_folder: str = ""
     presets: list[dict] = field(default_factory=list)    # user-customized presets
+    batch_settings: dict = field(default_factory=dict)   # last batch dialog choices
     cmd_history: list[str] = field(default_factory=list)  # recent custom commands
     ai_model_path: str = ""              # empty -> auto-discover <project>/models/*.onnx
     ai_sample_frames: int = 3            # legacy fixed count; frame_policy supersedes it
     ai_threads: int = 2                  # parallel inference workers
     ai_conf: float = 0.25                # detection confidence threshold
+    ai_device: str = "auto"              # auto | cpu | gpu (DirectML on Windows)
 
     # Cloud recognition (settings page; no upload happens until a scan uses it)
     cloud_api_key_dpapi: str = ""        # DPAPI ciphertext, Base64
@@ -43,6 +45,7 @@ class Config:
     tag_palette: list[str] = field(default_factory=list)    # enabled built-in tag ids
     frame_policy: str = "auto"           # auto | fast | fine
     upload_target_only: bool = True      # hybrid: only upload frames that may hit custom labels
+    local_color_tags: bool = True        # sample black/white/etc. on this PC
     first_run_done: bool = False         # setup finished (saved at least once)
     first_run_prompted: bool = False     # the welcome dialog was shown once
     guide_dismissed: bool = False        # the non-blocking "finish setup" bar was closed
@@ -69,6 +72,10 @@ class Config:
             for key, value in data.items():
                 if hasattr(cfg, key) and not key.startswith("_"):
                     setattr(cfg, key, value)
+        if cfg.ai_device not in ("auto", "cpu", "gpu"):
+            cfg.ai_device = "auto"
+        if not isinstance(cfg.local_color_tags, bool):
+            cfg.local_color_tags = True
         return cfg
 
     def save(self, path: str | Path | None = None) -> None:

@@ -64,7 +64,7 @@ from .theme import apply_theme, palette_for, resolve_mode
 from .titlebar import FolderChip, TitleBar
 from .toast import Toast
 from .widgets import (
-    BatchCommandDialog, FormatConvertDialog, MyTagsDialog, SettingsDialog,
+    BatchProcessDialog, MyTagsDialog, SettingsDialog,
 )
 from .widgets.mode_switch import AiModeSwitch, UploadConfirmDialog
 from .worker import ScanWorker
@@ -682,17 +682,10 @@ class MainWindow(QMainWindow):
         self._batch_btn.setProperty("variant", "ghost")
         self._batch_btn.setFixedHeight(34)
         self._batch_btn.setCursor(Qt.PointingHandCursor)
-        self._batch_btn.clicked.connect(self.open_batch)
-
-        self._convert_btn = QPushButton()
-        self._convert_btn.setProperty("variant", "ghost")
-        self._convert_btn.setFixedHeight(34)
-        self._convert_btn.setCursor(Qt.PointingHandCursor)
-        self._convert_btn.clicked.connect(self.open_convert)
+        self._batch_btn.clicked.connect(self.open_batch_process)
 
         row.addWidget(self._export_btn)
         row.addWidget(self._batch_btn)
-        row.addWidget(self._convert_btn)
 
     def _add_link(self, row: QHBoxLayout, slot) -> QPushButton:
         button = QPushButton()
@@ -746,8 +739,7 @@ class MainWindow(QMainWindow):
         text_map = {
             "toolbar.open_folder": self._open_btn,
             "toolbar.export": self._export_btn,
-            "toolbar.batch": self._batch_btn,
-            "toolbar.convert": self._convert_btn,
+            "toolbar.batch_process": self._batch_btn,
             "toolbar.cancel": self._stop_btn,
         }
         for key, widget in text_map.items():
@@ -1380,6 +1372,8 @@ class MainWindow(QMainWindow):
             threads=self._config.ai_threads,
             local_model_path=local_model,
             upload_target_only=self._config.upload_target_only,
+            device=self._config.ai_device,
+            color_tags=self._config.local_color_tags,
             parent=self,
         )
         self._scan_line.setRange(0, max(1, len(targets)))
@@ -1430,10 +1424,12 @@ class MainWindow(QMainWindow):
             frame_policy=self._config.frame_policy,
             threads=self._config.ai_threads,
             conf=self._config.ai_conf,
+            device=self._config.ai_device,
             enabled_tags=[
                 tag_id for tag_id in (self._config.tag_palette or list(DEFAULT_ENABLED))
                 if tag_id in ALL_TAG_IDS
             ],
+            color_tags=self._config.local_color_tags,
             parent=self,
         )
         self._start_tag_worker(self._tag_worker)
@@ -1691,22 +1687,15 @@ class MainWindow(QMainWindow):
             self._ai.set_custom_count(len(self._config.custom_labels))
             self._show_toast(self._tr("status.tags_saved"))
 
-    def open_batch(self) -> None:
+    def open_batch_process(self) -> None:
         records = self._target_records()
         if not records:
             message_box(self, "info", self._tr("app.title"), self._tr("msg.nothing_selected"))
             return
-        dialog = BatchCommandDialog(
-            records, self._tr, self._load_presets(), self, tokens=self._palette
+        dialog = BatchProcessDialog(
+            records, self._tr, self._load_presets(), self,
+            tokens=self._palette, config=self._config,
         )
-        dialog.exec()
-
-    def open_convert(self) -> None:
-        records = self._target_records()
-        if not records:
-            message_box(self, "info", self._tr("app.title"), self._tr("msg.nothing_selected"))
-            return
-        dialog = FormatConvertDialog(records, self._tr, self, tokens=self._palette)
         dialog.exec()
 
     def _load_presets(self) -> list[Preset]:

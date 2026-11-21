@@ -333,6 +333,24 @@ QMessageBox QPushButton:default {
     border: 1px solid @line@;
     border-radius: 9px;
 }
+QLabel#DeviceChip {
+    background: @accent_soft@;
+    color: @accent@;
+    border: none;
+    border-radius: 5px;
+    padding: 0 6px;
+    font-size: 9.5px;
+    font-weight: 600;
+}
+QLabel#DeviceTitle {
+    font-size: 11px;
+    font-weight: 600;
+    color: @ink_2@;
+}
+QLabel#DeviceHint {
+    font-size: 11px;
+    color: @ink_3@;
+}
 #PreviewChip {
     font-size: 9.5px;
     color: @ink_2@;
@@ -587,6 +605,13 @@ QToolButton#SettingsButton[attention="true"] {
 #SettingsPane QLabel#FactValue { font-size: 12px; }
 #SettingsPane QLabel#FactDetail { font-size: 10px; }
 #SettingsPane #AdvPanel { border-radius: 10px; }
+#SettingsPane QLabel#DeviceChip {
+    font-size: 9.5px;
+    border-radius: 5px;
+    padding: 0 6px;
+}
+#SettingsPane QLabel#DeviceTitle { font-size: 12px; }
+#SettingsPane QLabel#DeviceHint { font-size: 11px; }
 #SettingsPane QLabel#ModeTitle { font-size: 14px; }
 #SettingsPane QLabel#ModeDesc { font-size: 12px; }
 #SettingsPane QLabel#ModeFoot { font-size: 12px; }
