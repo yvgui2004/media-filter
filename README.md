@@ -37,7 +37,7 @@
 
 **Why people use it / 为什么用它**
 
-- **Your archive becomes searchable.** Tag clips by people, vehicles, pets, food, screens, scenes and shot size — locally with YOLOv8n (GPU or CPU), or through any OpenAI-compatible vision model. / **素材库变得可搜索**：人物、车辆、宠物、食物、屏幕、场景、景别，本地模型（GPU 或 CPU）或任意 OpenAI 格式视觉模型都能打标。
+- **Your archive becomes searchable.** Tag clips by people, vehicles, pets, food and screens locally with YOLOv8n (GPU or CPU); add scenes, shot size, technical traits and your own labels through hybrid or cloud tagging. / **素材库变得可搜索**：人物、车辆、宠物、食物、屏幕由本地 YOLOv8n（GPU 或 CPU）打标；场景、景别、技术特征和自定义标签通过混合或全云端识别补充。
 - **From "find it" to "done" in one window.** Filter by tag, tick what you need, then remux, compress with CPU / NVIDIA NVENC / AMD AMF, or run a custom FFmpeg template — with a command preview, live progress and a result summary. / **从找到到处理只用一个窗口**：按标签筛选，勾选后直接转封装、用 CPU / NVIDIA NVENC / AMD AMF 压缩，或跑自定义 FFmpeg 模板；每一步都有命令预览、实时进度和结果汇总。
 - **Labels that speak your workflow.** Add up to 10 of your own labels — `踢足球`, `露营`, `王者荣耀` — and hybrid / cloud tagging will look for them. Local-only mode stays completely offline. / **标签按你的工作流来**：最多添加 10 个自定义标签（踢足球、露营、王者荣耀……），混合 / 全云端识别会专门找它们；纯本地模式仍然完全离线。
 - **Nothing leaves your machine unless you say so.** Scanning and local tagging are offline; uploads wait behind a confirmation card, and the API key is DPAPI-encrypted. / **素材默认不出本机**：扫描与本地识别全程离线，上传前必须确认，API Key 用 DPAPI 加密。
@@ -88,7 +88,7 @@ Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatical
 
 - Recursively scans a folder and reads real metadata with `ffprobe`: size, duration, video and audio bitrate, format, modification time.
 - Shows everything in a sortable, filterable table with checkboxes and live totals (file count, total duration, total size).
-- **Optional AI tagging** — label videos by what is actually in them: people, screens, food, pets, vehicles, scenery, shot size, technical traits. Local YOLOv8n runs on the GPU through ONNX Runtime DirectML (NVIDIA, AMD and Intel) with a CPU fallback, and recognises 8 of the 26 built-in tags; hybrid keeps the local result and uploads only files where the local pass found something; cloud mode covers all 26. Cats, dogs and cars can also get colour tags (`黑猫`, `白狗`, `白车`). Your own labels sit alongside the built-ins — see [Custom labels](#custom-labels--自定义标签). Results are cached per file.
+- **Optional AI tagging** — label videos by what is actually in them. Local YOLOv8n (GPU through ONNX Runtime DirectML on NVIDIA, AMD and Intel, or CPU) recognises 8 of the 26 built-in tags: person, screen, computer, phone, food, cat, dog and car. Scene, shot-size and technical tags — plus crowd, face, mic and headphones — are cloud-only. Hybrid keeps the local result and uploads only files where the local pass found something; cloud mode covers all 26. Cats, dogs and cars can also get colour tags (`黑猫`, `白狗`, `白车`). Your own labels sit alongside the built-ins — see [Custom labels](#custom-labels--自定义标签). Results are cached per file.
 - **Batch processing** — one dialog with three tasks: fast remux, compression (x265 / x264, NVIDIA NVENC, AMD AMF, auto-detected with a CPU fallback) and custom FFmpeg. It previews the exact command for every file, plans collision-safe output paths, shows live progress and summarises successes, failures and size savings. See [Batch processing](#batch-processing--批量处理).
 - TXT report export, light / dark / system themes, Chinese and English UI.
 
@@ -96,7 +96,7 @@ Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatical
 
 - 递归扫描文件夹，用 `ffprobe` 读取真实元数据：大小、时长、音视频码率、格式、修改时间。
 - 一张可排序、可筛选的表格，带勾选和实时统计（文件数、总时长、总大小）。
-- **可选 AI 内容识别** —— 按画面内容打标签：人物、屏幕、食物、宠物、车辆、场景、景别、技术特征。本地 YOLOv8n 通过 ONNX Runtime DirectML 跑在显卡上（NVIDIA、AMD、Intel，失败自动回退 CPU），可识别 26 个内置标签中的 8 类；混合模式保留本地结果，只把本地已经识别出内容的文件送云端；全云端覆盖 26 个标签。猫、狗、车还会带颜色标签（`黑猫`、`白狗`、`白车`）。内置标签之外还能加你自己的标签，见 [自定义标签](#custom-labels--自定义标签)；结果按文件缓存。
+- **可选 AI 内容识别** —— 按画面内容打标签。本地 YOLOv8n（Windows 上通过 ONNX Runtime DirectML 跑在 NVIDIA / AMD / Intel 显卡，失败回退 CPU）能识别 26 个内置标签中的 8 类：人、屏幕、电脑、手机、食物、猫、狗、车。场景、景别、技术特征，以及多人、人脸特写、麦克风、耳机等细分类需要混合或全云端识别；混合模式保留本地结果，只把本地已经识别出内容的文件送云端；全云端覆盖 26 个标签。猫、狗、车还会带颜色标签（`黑猫`、`白狗`、`白车`）。内置标签之外还能加你自己的标签，见 [自定义标签](#custom-labels--自定义标签)；结果按文件缓存。
 - **批量处理** —— 一个对话框、三种任务：快速转换、压缩转码（x265 / x264、NVIDIA NVENC、AMD AMF，自动检测并支持 CPU 回退）、自定义 FFmpeg。会预览每个文件的实际命令，规划防冲突的输出路径，显示实时进度，结束后汇总成功、失败与体积变化，见 [批量处理](#batch-processing--批量处理)。
 - 导出 TXT 清单、浅色 / 深色 / 跟随系统主题、中英文界面。
 

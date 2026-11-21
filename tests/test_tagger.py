@@ -42,6 +42,14 @@ def test_local_mapping_only_uses_builtin_tag_ids():
     assert COCO_TO_TAG_ID["pizza"] == "food"
 
 
+def test_local_model_recognises_exactly_eight_tags():
+    # README promises 8 local tags; scene / shot-size / technical tags stay
+    # cloud-only, so adding a mapping here must update the docs too.
+    assert LOCAL_TAG_IDS == frozenset({
+        "person", "screen", "computer", "phone", "food", "cat", "dog", "car",
+    })
+
+
 def test_tally_detections_respects_enabled_tags():
     detections = [
         Detection(0, "person", 0.9, (0, 0, 10, 10)),

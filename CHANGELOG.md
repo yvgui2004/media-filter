@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Portable packages now include `LICENSE` and `THIRD_PARTY_NOTICES.md`; the
+  FFmpeg notice names the pinned BtbN build and links its exact source commit
+  and build scripts.
+- README now lists the 8 local YOLOv8n tags explicitly and marks scene,
+  shot-size and technical tags as cloud-only.
+
 ## [0.2.0] — 2026-11-21
 
 GPU-accelerated tagging and one batch-processing dialog.

@@ -46,6 +46,9 @@ The default Gyan "full" build is static and adds ~560 MB to the folder; use the
 **essentials/shared** build (ffmpeg.exe + DLLs, ~190 MB) for releases. The script
 copies every file except `ffplay.exe`, so shared builds keep working.
 
+`assemble` also copies the app's `LICENSE` and `THIRD_PARTY_NOTICES.md` into the
+portable folder; keep both when redistributing the zip.
+
 ## Winget / winget-pkgs
 
 The manifest lives in `packaging/winget/yvgui2004.MediaFilter/<version>/` and is

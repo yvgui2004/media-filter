@@ -92,6 +92,9 @@ Double-click MediaFilter.exe. No Python, no FFmpeg installation needed.
                       The app, with the local AI model bundled inside.
   ffmpeg\\bin\\          视频探测与抽帧用的 ffmpeg / ffprobe
                       ffmpeg / ffprobe used for probing and frame extraction.
+  LICENSE            应用源码的 MIT 许可 / MIT license for the app source
+  THIRD_PARTY_NOTICES.md  第三方组件许可与源码说明
+                      Third-party licenses, versions and source links
   使用说明.txt         本文件 / this file
 
 请保持 ffmpeg 文件夹与 MediaFilter.exe 的相对位置不变，不要单独移动 exe。
@@ -121,6 +124,17 @@ AI 模型已内置，无需额外下载；如需更换模型，在「设置 → 
 内置的 YOLOv8n 权重源自 Ultralytics，采用 AGPL-3.0 许可。
 Bundled YOLOv8n weights derive from Ultralytics and are licensed AGPL-3.0.
 
+第三方组件许可 / Third-party licenses
+------------------------------------
+本便携包还包含 FFmpeg（GPL-3.0-or-later）和 PySide6 / Qt（LGPL-3.0）。
+版本、源码地址和完整许可见 THIRD_PARTY_NOTICES.md。
+This package also bundles FFmpeg (GPL-3.0-or-later) and PySide6 / Qt
+(LGPL-3.0). See THIRD_PARTY_NOTICES.md for versions, source links and the
+full notices.
+
+再分发本文件夹时，请保留 LICENSE 和 THIRD_PARTY_NOTICES.md。
+If you redistribute this folder, keep LICENSE and THIRD_PARTY_NOTICES.md.
+
 项目主页 / Project
 ------------------
 https://github.com/yvgui2004/media-filter
@@ -138,6 +152,10 @@ def assemble(version: str) -> Path:
     (folder / "ffmpeg" / "bin").mkdir(parents=True)
 
     shutil.copy2(exe, folder / EXE_NAME)
+    for name in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
+        source = ROOT / name
+        if source.is_file():
+            shutil.copy2(source, folder / name)
     ffmpeg_dir = find_ffmpeg_dir()
     # Shared builds need their DLLs beside the exes; static builds only have
     # the two executables. Copy everything except the unused ffplay.
