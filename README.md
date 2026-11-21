@@ -76,7 +76,7 @@ Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatical
 
 - Recursively scans a folder and reads real metadata with `ffprobe`: size, duration, video and audio bitrate, format, modification time.
 - Shows everything in a sortable, filterable table with checkboxes and live totals (file count, total duration, total size).
-- **Optional AI tagging** — label videos by what is actually in them: people, screens, food, pets, vehicles, scenery, shot size, technical traits. Local YOLOv8n runs on the GPU through ONNX Runtime DirectML (NVIDIA, AMD and Intel) with a CPU fallback, and recognises 8 of the 26 built-in tags; hybrid keeps the local result and sends only likely candidates to the cloud; cloud mode covers all 26. Cats, dogs and cars can also get colour tags (`黑猫`, `白狗`, `白车`). Your own labels sit alongside the built-ins — see [Custom labels](#custom-labels--自定义标签). Results are cached per file.
+- **Optional AI tagging** — label videos by what is actually in them: people, screens, food, pets, vehicles, scenery, shot size, technical traits. Local YOLOv8n runs on the GPU through ONNX Runtime DirectML (NVIDIA, AMD and Intel) with a CPU fallback, and recognises 8 of the 26 built-in tags; hybrid keeps the local result and uploads only files where the local pass found something; cloud mode covers all 26. Cats, dogs and cars can also get colour tags (`黑猫`, `白狗`, `白车`). Your own labels sit alongside the built-ins — see [Custom labels](#custom-labels--自定义标签). Results are cached per file.
 - **Batch processing** — one dialog with three tasks: fast remux, compression (x265 / x264, NVIDIA NVENC, AMD AMF, auto-detected with a CPU fallback) and custom FFmpeg. It previews the exact command for every file, plans collision-safe output paths, shows live progress and summarises successes, failures and size savings. See [Batch processing](#batch-processing--批量处理).
 - TXT report export, light / dark / system themes, Chinese and English UI.
 
@@ -84,7 +84,7 @@ Keep the `ffmpeg` folder next to `MediaFilter.exe`; the app finds it automatical
 
 - 递归扫描文件夹，用 `ffprobe` 读取真实元数据：大小、时长、音视频码率、格式、修改时间。
 - 一张可排序、可筛选的表格，带勾选和实时统计（文件数、总时长、总大小）。
-- **可选 AI 内容识别** —— 按画面内容打标签：人物、屏幕、食物、宠物、车辆、场景、景别、技术特征。本地 YOLOv8n 通过 ONNX Runtime DirectML 跑在显卡上（NVIDIA、AMD、Intel，失败自动回退 CPU），可识别 26 个内置标签中的 8 类；混合模式保留本地结果，只把可能命中的画面送云端；全云端覆盖 26 个标签。猫、狗、车还会带颜色标签（`黑猫`、`白狗`、`白车`）。内置标签之外还能加你自己的标签，见 [自定义标签](#custom-labels--自定义标签)；结果按文件缓存。
+- **可选 AI 内容识别** —— 按画面内容打标签：人物、屏幕、食物、宠物、车辆、场景、景别、技术特征。本地 YOLOv8n 通过 ONNX Runtime DirectML 跑在显卡上（NVIDIA、AMD、Intel，失败自动回退 CPU），可识别 26 个内置标签中的 8 类；混合模式保留本地结果，只把本地已经识别出内容的文件送云端；全云端覆盖 26 个标签。猫、狗、车还会带颜色标签（`黑猫`、`白狗`、`白车`）。内置标签之外还能加你自己的标签，见 [自定义标签](#custom-labels--自定义标签)；结果按文件缓存。
 - **批量处理** —— 一个对话框、三种任务：快速转换、压缩转码（x265 / x264、NVIDIA NVENC、AMD AMF，自动检测并支持 CPU 回退）、自定义 FFmpeg。会预览每个文件的实际命令，规划防冲突的输出路径，显示实时进度，结束后汇总成功、失败与体积变化，见 [批量处理](#batch-processing--批量处理)。
 - 导出 TXT 清单、浅色 / 深色 / 跟随系统主题、中英文界面。
 
