@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-11-21
+
+Interaction and popover polish.
+
 ### Changed
 
 - Ticking is now the table's only persistent selection state. Clicking a row
@@ -38,7 +42,7 @@ All notable changes to this project are documented here. The format follows
   empty layout beside the actual disclosure row, so it had no size and never
   received a click. The row now wraps the line, chevron, title and summary and
   responds to mouse and keyboard.
-- The portable build's version resource was still 0.1.0; it now reports 0.2.0.
+- The portable build's version resource now tracks the release version.
 
 ## [0.2.0] — 2026-11-21
 
