@@ -137,8 +137,8 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $version = "${{ needs.build.outputs.version }}"
           $asset = "${{ needs.build.outputs.asset }}"
-          $zip = "dist-assets/$asset"
-          $sum = "dist-assets/$asset.sha256"
+          $zip = "dist-assets/release/$asset"
+          $sum = "dist-assets/release/$asset.sha256"
           $notes = "dist-assets/RELEASE_NOTES.md"
 
           gh release view $tag --repo $env:GITHUB_REPOSITORY
